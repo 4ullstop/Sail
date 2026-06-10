@@ -1,0 +1,11 @@
+*.vs
+*.pbd
+*.obj
+*.db
+*.diagsession
+EmacsDesktops/
+misc/EmacsDesktops/.emacs.desktop.lock
+/misc/EmacsDesktops
+misc/EmacsDesktops/.emacs.desktop.lock
+misc/EmacsDesktops/.emacs.desktop.lock
+misc/Output-DiagnosticsHub.txt
