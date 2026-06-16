@@ -1,11 +1,11 @@
 #include "sail_win32.h"
+
+#include "sail_game_layer.h"
 #include <windows.h>
 #include <stdio.h>
 
 #include "D:/ExternalCustomAPIs/FileReader/file_reader.h"
 #include "D:/ExternalCustomAPIs/FileReader/file_reader.cpp"
-
-#include "D:/ExternalCustomAPIs/Game/code/game_framework_dll_include.h"
 
 #include "D:/ExternalCustomAPIs/Win32/code/win32_framework_dll_include.h"
 
@@ -14,6 +14,8 @@
 
 #include <d3d11_2.h>
 #include <dxgi1_6.h>
+
+
 
 global_variable ID3D11Device* d3dDevice;
 global_variable ID3D11DeviceContext* context;
@@ -31,7 +33,7 @@ global_variable r32 screenHeight = 720;
 global_variable memory_pool_dll_code memoryPoolCode;
 global_variable win32_arenas* programArenas;
 
-global_variable game_framework_dll_code gameCode;
+global_variable game_framework_dll_code gameFrameworkCode;
 global_variable win32_framework_dll_code win32Code;
 global_variable parse_obj_data_code parseObjCode;
 
@@ -55,7 +57,7 @@ DXTestViewAndPerspective(dx_camera* camera)
 
     camera->fovY = 2.0f * (r32)(atan(tan(DirectX::XMConvertToRadians(70) * 0.5f)) / aspect.y);
 
-
+    camera->constantBufferData.world = {};
     
     DirectX::XMStoreFloat4x4(
 	&camera->constantBufferData.projection,
@@ -196,8 +198,9 @@ int CALLBACK WinMain(HINSTANCE hInstance,
     
     if (gameFrameworkLibrary)
     {
-	gameCode.GameCreateViewAndPerspective = (game_create_view_and_perspective*)GetProcAddress(gameFrameworkLibrary, "CreateViewAndPerspective");
-	gameCode.GameUpdateCamera = (game_update_camera*)GetProcAddress(gameFrameworkLibrary, "GameUpdateCamera");
+	gameFrameworkCode.GameCreateViewAndPerspective = (game_create_view_and_perspective*)GetProcAddress(gameFrameworkLibrary, "CreateViewAndPerspective");
+	gameFrameworkCode.GameUpdateCamera = (game_update_camera*)GetProcAddress(gameFrameworkLibrary, "GameUpdateCamera");
+	gameFrameworkCode.GameLoadOBJFiles = (game_load_obj_files*)GetProcAddress(gameFrameworkLibrary, "LoadGameOBJFiles");
     }
 
     HMODULE memoryPoolLibrary = LoadLibrary("D:/ExternalCustomAPIs/MemoryPools/dll/memory_pools.dll");
@@ -213,6 +216,11 @@ int CALLBACK WinMain(HINSTANCE hInstance,
 	memoryPoolCode.InitArena = (memory_pool_initialize_arena*)GetProcAddress(memoryPoolLibrary, "InitializeArena");
 	memoryPoolCode.ClearArena = (memory_pool_clear_arena*)GetProcAddress(memoryPoolLibrary, "ClearArena");
 	memoryPoolCode.PushArraySized = (memory_pool_push_array_sized*)GetProcAddress(memoryPoolLibrary, "PushArraySized");
+	memoryPoolCode.InitListedMemory = (memory_pool_init_listed_memory*)GetProcAddress(memoryPoolLibrary, "InitializeListedMemory");
+	memoryPoolCode.AddListedItem = (memory_pool_add_listed_item*)GetProcAddress(memoryPoolLibrary, "AddListedItem");
+	memoryPoolCode.RemoveListedItem = (memory_pool_remove_listed_item*)GetProcAddress(memoryPoolLibrary, "RemoveListedItem");
+	memoryPoolCode.AddToEndOfList = (memory_pool_add_to_end*)GetProcAddress(memoryPoolLibrary, "AddToEndOfList");
+	memoryPoolCode.RemoveSpecificNode = (memory_pool_remove_specific_node*)GetProcAddress(memoryPoolLibrary, "RemoveSpecificNode");
     }
 
     program_memory memory = {};
@@ -233,6 +241,8 @@ int CALLBACK WinMain(HINSTANCE hInstance,
     memoryPoolCode.InitArena(&programArenas->InitArena, initArenaAllocSize, &memory, e_arena_type::permanent);
     memoryPoolCode.InitArena(&programArenas->perFrameArena, perFrameArenaAllocSize, &memory, e_arena_type::transient);
 
+
+    
     game_camera gCamera;
     dx_camera dCamera;
 
@@ -244,6 +254,14 @@ int CALLBACK WinMain(HINSTANCE hInstance,
     {
 	win32Code.Win32ProcessPendingMessages =
 	    (win32_process_pending_messages*)GetProcAddress(win32FrameworkLibrary, "Win32ProcessPendingMessages");
+	win32Code.Win32LoadGameCode =
+	    (win32_load_game_code*)GetProcAddress(win32FrameworkLibrary, "Win32LoadGameCode");
+	win32Code.Win32GameCodeSetup =
+	    (win32_game_code_setup*)GetProcAddress(win32FrameworkLibrary, "Win32GameCodeSetup");
+	win32Code.Win32CheckAndLoadGameCode =
+	    (win32_check_and_load_game_code*)GetProcAddress(win32FrameworkLibrary, "CheckAndLoadGameCode");
+	win32Code.Win32CreateSpawnableBuffers =
+	    (win32_create_spawnable_buffers*)GetProcAddress(win32FrameworkLibrary, "Win32CreateSpawnableBuffers");
     }
 
     HMODULE parseOBJLibrary = LoadLibrary("D:/ExternalCustomAPIs/OBJLoader/dll/obj_loader.dll");
@@ -251,6 +269,13 @@ int CALLBACK WinMain(HINSTANCE hInstance,
     {
 	parseObjCode.ParseOBJData = (parse_obj_data*)GetProcAddress(parseOBJLibrary, "ParseOBJData");
     }
+
+
+    game_code_path_cluster gamePaths = 
+	win32Code.Win32GameCodeSetup("sail_game_layer.dll",
+				     "sail_temp_layer.dll",
+				     "sail_lock_layer.tmp",
+				     &programState);
     
     dCamera.startEye = DirectX::XMVectorSet(0.0f, 0.7f, 1.5f, 0.f);
     dCamera.startAt = DirectX::XMVectorSet(0.0f, -0.1f, 0.0f, 0.f);
@@ -274,15 +299,47 @@ int CALLBACK WinMain(HINSTANCE hInstance,
     gCamera.front = {0.0f, 0.0f, -1.0f, 0.0f};
     gCamera.position = {10.0f, 10.0f, 10.0f};
     
-    gCamera.aspect = aspect;
+    gCamera.aspect = v4{aspect.x, aspect.y, 0.0f, 0.0f};
 
     DXTestViewAndPerspective(&dCamera);
-    gameCode.GameCreateViewAndPerspective(&gCamera);
+    gameFrameworkCode.GameCreateViewAndPerspective(&gCamera);
+
+    
+//    DXUpdateCam(&dCamera);
+//    gameFrameworkCode.GameUpdateCamera(&gCamera);
 
 
-    DXUpdateCam(&dCamera);
-    gameCode.GameUpdateCamera(&gCamera);
+    //Sail layer code
+    win32_game_code sailGameCode =
+	win32Code.Win32LoadGameCode(&gamePaths,
+				    "SailUpdate",
+				    "SailInitialize",
+				    &memoryPoolCode,
+				    &programArenas->InitArena);
+    u32 loadCounter = 120;
+    
+    sail_update* SailUpdate = (sail_update*)sailGameCode.GameUpdate;
+    sail_initialize* SailInitialize = (sail_initialize*)sailGameCode.GameInitialize;
 
+    platform_info platformInfo = {};
+    platformInfo.aspect = aspect;
+    /*
+    memory_arena* setupArena;
+    memory_arena* perFrameArena;
+    memory_arena* spawnedObjectArena;
+      
+     */
+
+
+    platformInfo.frameworkArenas.setupArena = &programArenas->InitArena;
+    platformInfo.frameworkArenas.perFrameArena = &programArenas->perFrameArena;
+
+    platformInfo.parseObjCode = &parseObjCode;
+
+    sail_initialize_data sailInitData = {};
+    game_camera gameCamera = SailInitialize(&sailInitData, &gameFrameworkCode, &memoryPoolCode, &platformInfo, &memory);
+
+    
     D3D_FEATURE_LEVEL levels[] = {
 	D3D_FEATURE_LEVEL_11_1,
 	D3D_FEATURE_LEVEL_11_0,
@@ -327,6 +384,14 @@ int CALLBACK WinMain(HINSTANCE hInstance,
     wc.hbrBackground = (HBRUSH)GetStockObject(BLACK_BRUSH);
     wc.lpszClassName = "Sailing";
 
+
+    win32_spawnable_objs win32Buffers = {};
+    win32Code.Win32CreateSpawnableBuffers(&sailInitData.gameObjs,
+					  &win32Buffers,
+					  platformInfo.frameworkArenas.spawnedObjectArena,
+					  &programArenas->perFrameArena,
+					  &memoryPoolCode,
+					  d3dDevice);    
     if (RegisterClass(&wc))
     {
 	RECT rect = {};
@@ -421,6 +486,11 @@ int CALLBACK WinMain(HINSTANCE hInstance,
 	    
 	    while (programState.running)
 	    {
+		loadCounter = win32Code.Win32CheckAndLoadGameCode(&gamePaths,
+								  &sailGameCode,
+								  &memoryPoolCode,
+								  &programArenas->InitArena);
+
 		game_controller_input* oldKeyboardController = GetController(oldInput, 0);
 		game_controller_input* newKeyboardController = GetController(newInput, 0);
 		
@@ -443,6 +513,8 @@ int CALLBACK WinMain(HINSTANCE hInstance,
 		//The rest of the stuff (besides rendering) we see in win32_dx11.cpp should all be moved to our
 		//game code bc it's something we want to separate from the platform, and since
 		//I spent the time creating a separate math library, I would actually like to use it
+
+		SailUpdate(&gameFrameworkCode, &memoryPoolCode);
 
 		game_input* temp = newInput;
 		newInput = oldInput;

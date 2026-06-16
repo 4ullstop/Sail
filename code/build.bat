@@ -17,7 +17,7 @@ fxc.exe -nologo /Od /Zi /T vs_5_0 /Fo vs.cso "S:\code\vs.hlsl"
 fxc.exe -nologo /Od /Zi /T ps_5_0 /Fo ps.cso "S:\code\ps.hlsl"
 
 
-REM cl %commonCompilerFlags% ..\code\game_layer.cpp /LD /link /EXPORT:GameUpdate /EXPORT:GameInitialize
+cl %commonCompilerFlags% ..\code\sail_game_layer.cpp /LD /link /EXPORT:SailUpdate /EXPORT:SailInitialize
 
 cl %commonCompilerFlags% ..\code\sail_win32.cpp  /link %commonLinkerFlags%
 popd
