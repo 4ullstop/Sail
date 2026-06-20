@@ -15,6 +15,8 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
     cameraResult.front = {0.0f, 0.0f, -1.0f, 0.0f};
     cameraResult.position = {10.0f, 4.0f, 9.0f, 0.0f};
 
+    cameraResult.movementSpeed = 5.0f;
+
     r32 aspectX = platformInfo->aspect.x;
     r32 aspectY = platformInfo->aspect.y;
 	
@@ -46,6 +48,12 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
 								      &platformInfo->frameworkArenas,
 								      pgMem, memoryPoolCode, &paths, 1);
 
+    v4 spawnObjLoc = v4{0.0f, 0.0f, 0.0f, 0.0f};
+    gameFrameworkCode->GameSpawnNewOBJ(spawnable_obj_type::sot_ico,
+				       spawnObjLoc,
+				       &initData->gameObjs,
+				       memoryPoolCode);
+    
     return(cameraResult);
 }
 

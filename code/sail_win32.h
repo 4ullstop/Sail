@@ -62,5 +62,15 @@ struct shaders
     
 };
 
+struct object_constants
+{
+    DirectX::XMFLOAT4 worldPos;
+};
+
+struct sail_constant_buffers
+{
+    ID3D11Buffer* dynamicVBuffer;
+};
+
 #define SAIL_WIN32_H
 #endif

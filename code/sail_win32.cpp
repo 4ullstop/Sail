@@ -42,7 +42,22 @@ global_variable v2 aspect = v2{(r32)1.7075098752975464, (r32)0.960474312305450};
 global_variable thread_context blankThread;
 
 global_variable program_state programState;
+global_variable i64 perfCountFrequency;
 
+inline LARGE_INTEGER
+Sail32GetWallClock(void)
+{
+    LARGE_INTEGER result = {};
+    QueryPerformanceCounter(&result);
+    return(result);
+}
+
+internal r32
+Sail32GetSecondsElapsed(LARGE_INTEGER start, LARGE_INTEGER end)
+{
+    r32 result = ((r32)(end.QuadPart - start.QuadPart) / (r32)perfCountFrequency);
+    return(result);
+}
 
 internal void
 DXTestViewAndPerspective(dx_camera* camera)
@@ -113,6 +128,12 @@ LRESULT CALLBACK Win32MainWindowProc(HWND hwnd,
     case WM_ACTIVATEAPP:
     {
 	OutputDebugString("App activated\n");
+    } break;
+    case WM_CLOSE:
+    case WM_DESTROY:
+    case WM_QUIT:
+    {
+	programState.running = false;
     } break;
     default:
     {
@@ -185,13 +206,96 @@ CreateShaders(shaders* gameShaders)
 	&gameShaders->vsConstantBuffer);
 }
 
+internal draw_buffers*
+GetDrawBuffersFromSpawnable(win32_spawnable_objs* win32Objs, spawned_obj_info* info)
+{
+    draw_buffers* result = 0;
+    result = &win32Objs->objDrawnBuffers[info->type];
+    return(result);
+}
+
+internal void
+Render(game_loaded_objs* gameObjs, win32_spawnable_objs* win32Objs, sail_constant_buffers* cBuffers, shaders* shader, dx_camera* dxCam)
+{
+    //Normal render setup
+    r32 teal[] = {0.098f, 0.439f, 1.000f};
+
+    context->UpdateSubresource(shader->vsConstantBuffer, 0, nullptr, &dxCam->constantBufferData, 0, 0);
+
+    context->ClearRenderTargetView(renderTargetView,
+				   teal);
+
+    context->ClearDepthStencilView(depthStencilView,
+				   D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL,
+				   1.0f,
+				   0);
+    
+    context->OMSetRenderTargets(1,
+				&renderTargetView,
+				depthStencilView);
+
+    context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    context->IASetInputLayout(shader->vertexInputLayout);
+    context->VSSetConstantBuffers(0, 1, &shader->vsConstantBuffer);
+
+    context->VSSetShader(shader->vertexShader,
+			 nullptr,
+			 0);
+
+    context->PSSetShader(shader->pixelShader,
+			 nullptr,
+			 0);
+    
+    //Just rendering the small things we want to render
+    listed_memory_node* objNode = (listed_memory_node*)gameObjs->spawnedObjNodes;
+
+    HRESULT hr = {};
+    for (i32 i = 0; i < gameObjs->spawnedObjMemory->numOfItems; i++)
+    {
+	Assert(objNode);
+
+	spawned_obj_info* objInfo = (spawned_obj_info*)objNode->data;
+	draw_buffers* drawBuffers = GetDrawBuffersFromSpawnable(win32Objs, objInfo);
+	context->VSSetConstantBuffers(1, 1, &cBuffers->dynamicVBuffer);
+
+	UINT stride = sizeof(vertex_position_color);
+	UINT offset = 0;
+
+	context->IASetVertexBuffers(0, 1, &drawBuffers->vertexBuffer, &stride, &offset);
+	context->IASetIndexBuffer(drawBuffers->indexBuffer, DXGI_FORMAT_R16_UINT, 0);
+
+	D3D11_MAPPED_SUBRESOURCE mapped;
+	hr = context->Map(cBuffers->dynamicVBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
+	object_constants* data = (object_constants*)mapped.pData;
+
+	DirectX::XMVECTOR vecWorld = win32Code.Win32FromV4ToXMVECTOR(objInfo->location);
+	DirectX::XMStoreFloat4(&data->worldPos, vecWorld);
+
+	context->Unmap(cBuffers->dynamicVBuffer, 0);
+
+	context->DrawIndexed(
+	    drawBuffers->indexCount,
+	    0,
+	    0);
+
+	objNode = objNode->next;
+    }
+}
+
 int CALLBACK WinMain(HINSTANCE hInstance,
 		     HINSTANCE hPrevInstance,
 		     LPSTR lpCmdLine,
 		     int nCmdShow)
 {
-    //Used modules loading and function loading
 
+    UINT desiredSchedulerMs = 1;
+    bool32 sleepIsGranular = (timeBeginPeriod(desiredSchedulerMs) == TIMERR_NOERROR);
+
+
+//Used modules loading and function loading
+
+    
+    
     HMODULE gameFrameworkLibrary = LoadLibrary("D:/ExternalCustomAPIs/Game/dll/game_framework.dll");
 
 
@@ -201,6 +305,7 @@ int CALLBACK WinMain(HINSTANCE hInstance,
 	gameFrameworkCode.GameCreateViewAndPerspective = (game_create_view_and_perspective*)GetProcAddress(gameFrameworkLibrary, "CreateViewAndPerspective");
 	gameFrameworkCode.GameUpdateCamera = (game_update_camera*)GetProcAddress(gameFrameworkLibrary, "GameUpdateCamera");
 	gameFrameworkCode.GameLoadOBJFiles = (game_load_obj_files*)GetProcAddress(gameFrameworkLibrary, "LoadGameOBJFiles");
+	gameFrameworkCode.GameSpawnNewOBJ = (game_spawn_new_obj*)GetProcAddress(gameFrameworkLibrary, "SpawnNewOBJ");
     }
 
     HMODULE memoryPoolLibrary = LoadLibrary("D:/ExternalCustomAPIs/MemoryPools/dll/memory_pools.dll");
@@ -244,7 +349,7 @@ int CALLBACK WinMain(HINSTANCE hInstance,
 
     
     game_camera gCamera;
-    dx_camera dCamera;
+    dx_camera dxCam;
 
 
     //Win32 Framework Module
@@ -262,6 +367,10 @@ int CALLBACK WinMain(HINSTANCE hInstance,
 	    (win32_check_and_load_game_code*)GetProcAddress(win32FrameworkLibrary, "CheckAndLoadGameCode");
 	win32Code.Win32CreateSpawnableBuffers =
 	    (win32_create_spawnable_buffers*)GetProcAddress(win32FrameworkLibrary, "Win32CreateSpawnableBuffers");
+	win32Code.Win32FromV4ToXMVECTOR =
+	    (win32_from_v4_to_xmvector*)GetProcAddress(win32FrameworkLibrary, "FromV4ToXMVECTOR");
+	win32Code.Win32ConvertGameCameraToWin32 =
+	    (win32_convert_game_camera_to_win32*)GetProcAddress(win32FrameworkLibrary, "ConvertGameCameraDataToWin32");
     }
 
     HMODULE parseOBJLibrary = LoadLibrary("D:/ExternalCustomAPIs/OBJLoader/dll/obj_loader.dll");
@@ -277,36 +386,6 @@ int CALLBACK WinMain(HINSTANCE hInstance,
 				     "sail_lock_layer.tmp",
 				     &programState);
     
-    dCamera.startEye = DirectX::XMVectorSet(0.0f, 0.7f, 1.5f, 0.f);
-    dCamera.startAt = DirectX::XMVectorSet(0.0f, -0.1f, 0.0f, 0.f);
-    dCamera.startUp = DirectX::XMVectorSet(0.0f, 1.0f, 0.0f, 0.f);
-    
-    dCamera.up = dCamera.startUp;
-    dCamera.worldUp = dCamera.startUp;
-    dCamera.yaw = -90.0f;
-    dCamera.pitch = 0.0f;
-    dCamera.front = {0.0f, 0.0f, -1.0f, 0.0f};
-    dCamera.movementSpeed = 5.0f;
-    dCamera.turnSpeed = 0.2f;
-    dCamera.position = {10.0f, 10.0f, 10.0f};
-
-    gCamera.startEye = {0.0f, 0.7f, 1.5f, 0.f};
-    gCamera.startAt = {0.0f, -0.1f, 0.0f, 0.f};
-    gCamera.startUp = {0.0f, 1.0f, 0.0f, 0.f};
-
-    gCamera.yaw = -90.0f;
-    gCamera.pitch = 0.0f;
-    gCamera.front = {0.0f, 0.0f, -1.0f, 0.0f};
-    gCamera.position = {10.0f, 10.0f, 10.0f};
-    
-    gCamera.aspect = v4{aspect.x, aspect.y, 0.0f, 0.0f};
-
-    DXTestViewAndPerspective(&dCamera);
-    gameFrameworkCode.GameCreateViewAndPerspective(&gCamera);
-
-    
-//    DXUpdateCam(&dCamera);
-//    gameFrameworkCode.GameUpdateCamera(&gCamera);
 
 
     //Sail layer code
@@ -417,13 +496,19 @@ int CALLBACK WinMain(HINSTANCE hInstance,
 	    //Get our refresh rate
 	    i32 monitorRefreshRate = 60;
 
+
+#if 0	    
 	    HDC refreshDC = GetDC(window);
 	    i32 win32RefreshRate = GetDeviceCaps(refreshDC, VREFRESH);
 	    if (win32RefreshRate > 1)
 	    {
 		monitorRefreshRate = win32RefreshRate;
 	    }
+#endif
 
+	    r32 gameUpdateHz = (monitorRefreshRate / 2.0f);
+	    r32 targetSecondsPerFrame = 1.0f / (r32)monitorRefreshRate;
+	    
 	    //Creating our swap chain
 	    DXGI_SWAP_CHAIN_DESC1 desc = {};
 	    desc.BufferCount = 2;
@@ -481,11 +566,50 @@ int CALLBACK WinMain(HINSTANCE hInstance,
 	    game_input input[2] = {};
 	    game_input* newInput = &input[0];
 	    game_input* oldInput = &input[1];
-
-	    programState.running = true;
 	    
+	    programState.running = true;
+
+	    LARGE_INTEGER frequency = {};
+	    QueryPerformanceFrequency(&frequency);
+	    perfCountFrequency = frequency.QuadPart;
+	    
+	    LARGE_INTEGER startTime;
+	    LARGE_INTEGER endTime;
+
+	    LARGE_INTEGER lastCounter;
+	    QueryPerformanceCounter(&lastCounter);
+	    
+	    r32 deltaTime = 0.0f;
+
+	    //Init our dynamic constant buffer
+	    //This can be moved outside to a new function when
+	    //need/when I create more buffers for the game, but rn it's just here
+	    D3D11_BUFFER_DESC cbDesc = {};
+	    cbDesc.Usage = D3D11_USAGE_DYNAMIC;
+	    cbDesc.ByteWidth = sizeof(object_constants);
+	    cbDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+	    cbDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+
+	    
+	    sail_constant_buffers sailConstantBuffers = {};
+	    
+	    hr = d3dDevice->CreateBuffer(&cbDesc, NULL, &sailConstantBuffers.dynamicVBuffer);
+
+
+	    RAWINPUTDEVICE rid[1];
+	    rid[0].usUsagePage = 0x01;
+	    rid[0].usUsage = 0x02;
+	    rid[0].dwFlags = RIDEV_NOLEGACY;
+	    rid[0].hwndTarget = window;
+
+	    if (RegisterRawInputDevices(rid, 1, sizeof(rid[0])) == FALSE)
+	    {
+		OutputDebugString("Input device NOT registered\n");
+	    }
 	    while (programState.running)
 	    {
+		QueryPerformanceCounter(&startTime);
+		
 		loadCounter = win32Code.Win32CheckAndLoadGameCode(&gamePaths,
 								  &sailGameCode,
 								  &memoryPoolCode,
@@ -510,21 +634,89 @@ int CALLBACK WinMain(HINSTANCE hInstance,
 						      &programArenas->perFrameArena,
 						      &programState);
 
+		gameCamera.xChange = deltaTime * (0.3f * mouse.loc.x);
+		gameCamera.yChange = deltaTime * (0.3f * mouse.loc.y);
 		//The rest of the stuff (besides rendering) we see in win32_dx11.cpp should all be moved to our
 		//game code bc it's something we want to separate from the platform, and since
 		//I spent the time creating a separate math library, I would actually like to use it
 
-		SailUpdate(&gameFrameworkCode, &memoryPoolCode);
+		SailUpdate(&gameFrameworkCode, &memoryPoolCode, newInput, &gameCamera, deltaTime);
 
+
+		game_camera_data gCamData = {};
+		gCamData.world = gameCamera.world;
+		gCamData.view = gameCamera.view;
+		gCamData.projection = gameCamera.projection;
+		
+		win32Code.Win32ConvertGameCameraToWin32(&dxCam, &gCamData);
+
+		Render(&sailInitData.gameObjs, &win32Buffers, &sailConstantBuffers, &gameShaders, &dxCam);
+
+		swapChain->Present(1, 0);
+
+		LARGE_INTEGER workCounter = {};
+		QueryPerformanceCounter(&workCounter);
+		r32 workSecondsElapsed = Sail32GetSecondsElapsed(lastCounter, workCounter);
+		r32 secondsElapsedForFrame = workSecondsElapsed;
+
+		if (secondsElapsedForFrame < targetSecondsPerFrame)
+		{
+		    DWORD sleepMs = 0;
+		    while (secondsElapsedForFrame < targetSecondsPerFrame)
+		    {
+			if (sleepIsGranular)
+			{
+			    sleepMs = (DWORD)(1000.0f * (targetSecondsPerFrame - secondsElapsedForFrame));
+			    if (sleepMs > 0)
+			    {
+				Sleep(sleepMs - 1);
+			    }
+			}
+			secondsElapsedForFrame = Sail32GetSecondsElapsed(lastCounter,
+									 Sail32GetWallClock());
+			
+		    }
+		    r32 testSecondsForFrame = Sail32GetSecondsElapsed(lastCounter, Sail32GetWallClock());
+		    if (testSecondsForFrame < targetSecondsPerFrame)
+		    {
+			//Frame was missed error
+		    }
+		}
+		else
+		{
+		    //also missed a frame
+		}
+
+		//spin
+
+		
+
+		//after spin
+		LARGE_INTEGER endCounter = Sail32GetWallClock();
+
+		r32 msPerFrame = (1000.0f * Sail32GetSecondsElapsed(lastCounter,
+								    Sail32GetWallClock()));
+
+		lastCounter = endCounter;
+		
 		game_input* temp = newInput;
 		newInput = oldInput;
 		oldInput = temp;
 
 		memoryPoolCode.ClearArena(&programArenas->perFrameArena);
+
+		QueryPerformanceCounter(&endTime);
+		LONGLONG elapsed = endTime.QuadPart - startTime.QuadPart;
+		deltaTime = (r32)((r32)elapsed / (r32)frequency.QuadPart);
+
+
 	    }
 	}
     }
 	
-    
+    if (!programState.running)
+    {
+	i32 foo = 0;
+    }
     return(0);
 }
