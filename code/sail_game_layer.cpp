@@ -66,25 +66,25 @@ extern "C" SAIL_UPDATE(SailUpdate)
     r32 velocity = camera->movementSpeed * deltaTime;
     if (controller)
     {
-	if (controller->moveForward.started)
+	if (controller->moveForward.endedDown)
 	{
 	    //w
 	    camera->position = camera->position + (camera->front * velocity);
 	}
 
-	if (controller->moveLeft.started)
+	if (controller->moveLeft.endedDown)
 	{
 	    //a
 	    camera->position = camera->position - (camera->right * velocity);
 	}
 
-	if (controller->moveBackward.started)
+	if (controller->moveBackward.endedDown)
 	{
 	    //s
 	    camera->position = camera->position - (camera->front * velocity);	    
 	}
 
-	if (controller->moveRight.started)
+	if (controller->moveRight.endedDown)
 	{
 	    //d
 	    camera->position = camera->position + (camera->right * velocity);
