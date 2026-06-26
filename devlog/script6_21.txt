@@ -1,0 +1,54 @@
+I have a very subjective question for you, what does it mean to develop games?
+* Play montage of moments of frustation *  - which means you have to record yourself...
+
+
+
+Thank you for joining me, My name is Aaron, I am a game developer with a Bachelor's in Game design who has been developing games independently for the past 4 years.
+
+A lot of these games unfortunately have rarely seen the finish line, or even the light of day past my
+own hard drive
+With the creation of this series, I intend to change that
+
+Without further adieu, lets get into it:
+
+Where am I as of 6/21:
+
+I've spent a lot of time writing a lot of the same code over and over
+The problem is is that this wastes a lot of time, and makes it really hard to pick up new projects when I feel like I need to
+
+Now, you make look at me and think I'm crazy, why would this man spend time writing his own engine when there are plenty of premade engines out there
+Especially since you're solo dev??
+
+And there's a whole lot of reasons in which I believe spending time to make your own engine is incredibly important
+    - Maybe an engine is making decisions about the way it works that don't fit your wants and needs
+    - Maybe you believe the engine that already exists is needlessly complicated for what you want to make
+    - Maybe the engines out there are poorly constructed and force you to work in a way that limits your productivty and therefore ability to be creative and then you end up making the same game that everyone else is making when you want to make experiences that no one has experienced before and in order to do that you spend 3 years learning C, learning graphics programming, learning 3D math and after 3 years only have a cube on the screen to show for your progress
+
+    - Or maybe you just enjoy programming
+
+So, to combat the repeated code issue I started to develop my own APIs
+It's through these APIs that I then simply call the functions that were being repeated to have a faster start up time when it came to a new idea
+
+
+When it comes to engine architecture, while I am definitely not the pro when it comes to this, a lot of what I have heard is that you want to avoid Immediate Mode Rendering
+
+This essentially means that we don't want our game code (cameras, entities, everthing that the game requires) to be intertwined with our platform layer (think the ways that Dx11 creates and fills buffers vs whatever OpenGL does)
+This way all we have to do is take our game layer and the functions that are to be called in it, and simply plop it on top of whatever platform we decide to use, plug and play type of situation
+
+What this entails however is far more difficult, especially for 3D games (this is where it gets fun)
+
+So given this first obstacle, one of the major things we need to avoid is wrapping our game code around the platform
+This means:
+ - Our camera shouldn't be based on our platform
+ - Input response shouldn't be based on our platform
+ - Loading things shouldn't be based on our platform
+
+What does this mean physically? Well it means that I took the time to develop a somewhat custom math library so that our camera doesn't have to exist in DirectX land
+(All I basically did was take a look at the backend of DirectXMath and assimilate using my own types for vectors and matrices)
+
+So after developing all of these things where am I now?:
+Well I have a game engine! So I can start making games
+
+The goal:
+One month to make a game, no quitting, whatever gets done by the end of the month is what I have
+No scope creep, something small and simple

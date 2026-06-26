@@ -17,12 +17,19 @@ cbuffer ModelViewProjectionConstantBuffer : register(b0)
 	matrix projection;
 }
 
+cbuffer ModelWorldBuffer : register(b1)
+{
+	matrix modelWorld;
+}
+
 VS_OUTPUT main(VS_INPUT input)
 {
 	VS_OUTPUT output;
 	float4 pos = float4(input.vPos, 1.0f);
 
 //	pos = mul(pos, mWorld);
+	
+	pos = mul(pos, modelWorld);
 	pos = mul(pos, view);
 	pos = mul(pos, projection);
 

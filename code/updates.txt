@@ -1,0 +1,10 @@
+For updates on where I am for potential devlogs
+
+6.21:
+ - Platform layer and game layer are set up such that I can start developing the game
+ - There is complete separation between game and platform layers
+ - The camera is located in the game layer as opposed to the platform layer
+ - Have something before you leave for MA?
+ 
+
+

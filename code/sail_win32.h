@@ -64,7 +64,8 @@ struct shaders
 
 struct object_constants
 {
-    DirectX::XMFLOAT4 worldPos;
+//    DirectX::XMFLOAT4 worldPos;
+    DirectX::XMFLOAT4X4 modelMat;
 };
 
 struct sail_constant_buffers

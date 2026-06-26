@@ -238,6 +238,7 @@ Render(game_loaded_objs* gameObjs, win32_spawnable_objs* win32Objs, sail_constan
     context->IASetInputLayout(shader->vertexInputLayout);
     context->VSSetConstantBuffers(0, 1, &shader->vsConstantBuffer);
 
+
     context->VSSetShader(shader->vertexShader,
 			 nullptr,
 			 0);
@@ -264,12 +265,21 @@ Render(game_loaded_objs* gameObjs, win32_spawnable_objs* win32Objs, sail_constan
 	context->IASetVertexBuffers(0, 1, &drawBuffers->vertexBuffer, &stride, &offset);
 	context->IASetIndexBuffer(drawBuffers->indexBuffer, DXGI_FORMAT_R16_UINT, 0);
 
+	//How we set it up:
+	/*
+	  Convert all transformations (scale, rotation, location) into matrices
+	  Multiply them together scaleM * rotation * location == ModelMatrix
+	  Upload model matrix as opposed to Float4 to shader to be used
+	 */
 	D3D11_MAPPED_SUBRESOURCE mapped;
 	hr = context->Map(cBuffers->dynamicVBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
 	object_constants* data = (object_constants*)mapped.pData;
 
-	DirectX::XMVECTOR vecWorld = win32Code.Win32FromV4ToXMVECTOR(objInfo->location);
-	DirectX::XMStoreFloat4(&data->worldPos, vecWorld);
+	
+	DirectX::XMMATRIX dxMat = win32Code.Win32FromM4ToXMMATRIX(objInfo->modelMatrix);
+
+
+	DirectX::XMStoreFloat4x4(&data->modelMat, dxMat);
 
 	context->Unmap(cBuffers->dynamicVBuffer, 0);
 
@@ -288,6 +298,48 @@ int CALLBACK WinMain(HINSTANCE hInstance,
 		     int nCmdShow)
 {
 
+    /*
+      Testing zone
+     */
+
+    v4 v = {2.234f, 51.4357893f, 34.12548932f, 2904.239834f};
+    DirectX::XMVECTOR xmV = DirectX::XMVectorSet(2.234f, 51.4357893f, 34.12548932f, 2904.239834f);    
+#if 0
+    //v4
+
+    v4 fmRound = VectorRound(v);
+
+    //XMVECTOR
+
+    DirectX::XMVECTOR xmRound = DirectX::XMVectorRound(xmV);
+
+    v4 fmModAng = VectorModAngles(v);
+
+    DirectX::XMVECTOR xmModAng = DirectX::XMVectorModAngles(xmV);
+
+
+
+    m4 m = {};
+    m.r[0] = v;
+    m.r[1] = v;
+    m.r[2] = v;
+    m.r[3] = v;    
+
+    m4 fmQuat = MatrixRotationQuaternion(v);
+
+    DirectX::XMMATRIX xmQuat = DirectX::XMMatrixRotationQuaternion(xmV);
+
+
+    
+    v4 fmRN = QuaternionRotationNormal(v, 30.f);
+
+    DirectX::XMVECTOR xmRN = DirectX::XMQuaternionRotationNormal(xmV, 30.f);
+#endif
+
+    
+
+
+    
     UINT desiredSchedulerMs = 1;
     bool32 sleepIsGranular = (timeBeginPeriod(desiredSchedulerMs) == TIMERR_NOERROR);
 
@@ -295,6 +347,7 @@ int CALLBACK WinMain(HINSTANCE hInstance,
 //Used modules loading and function loading
 
     
+
     
     HMODULE gameFrameworkLibrary = LoadLibrary("D:/ExternalCustomAPIs/Game/dll/game_framework.dll");
 
@@ -371,6 +424,8 @@ int CALLBACK WinMain(HINSTANCE hInstance,
 	    (win32_from_v4_to_xmvector*)GetProcAddress(win32FrameworkLibrary, "FromV4ToXMVECTOR");
 	win32Code.Win32ConvertGameCameraToWin32 =
 	    (win32_convert_game_camera_to_win32*)GetProcAddress(win32FrameworkLibrary, "ConvertGameCameraDataToWin32");
+	win32Code.Win32FromM4ToXMMATRIX =
+	    (win32_from_m4_to_xmmatrix*)GetProcAddress(win32FrameworkLibrary, "FromM4ToXMMATRIX");
     }
 
     HMODULE parseOBJLibrary = LoadLibrary("D:/ExternalCustomAPIs/OBJLoader/dll/obj_loader.dll");
@@ -698,7 +753,6 @@ int CALLBACK WinMain(HINSTANCE hInstance,
 								    Sail32GetWallClock()));
 
 		lastCounter = endCounter;
-		
 		game_input* temp = newInput;
 		newInput = oldInput;
 		oldInput = temp;

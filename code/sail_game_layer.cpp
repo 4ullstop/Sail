@@ -13,7 +13,7 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
     cameraResult.yaw = -90.0f;
     cameraResult.pitch = 0.0f;
     cameraResult.front = {0.0f, 0.0f, -1.0f, 0.0f};
-    cameraResult.position = {10.0f, 4.0f, 9.0f, 0.0f};
+    cameraResult.position = {-4.2f, 0.04f, 0.77f, 0.0f};
 
     cameraResult.movementSpeed = 5.0f;
 
@@ -41,19 +41,30 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
 
 
     char* icoPath = "../data/obj/debug_ico.obj";
-    char* paths = {icoPath};
+    char* boatPath = "../data/obj/boat_V1.obj";
+    char* paths = {boatPath};
 
     
     initData->gameObjs = gameFrameworkCode->GameLoadOBJFiles(platformInfo->parseObjCode,
 								      &platformInfo->frameworkArenas,
 								      pgMem, memoryPoolCode, &paths, 1);
 
-    v4 spawnObjLoc = v4{0.0f, 0.0f, 0.0f, 0.0f};
+    v4 spawnObjLoc = v4{0.0f, 0.0f, 0.0f, 1.0f};
+#if 0
     gameFrameworkCode->GameSpawnNewOBJ(spawnable_obj_type::sot_ico,
 				       spawnObjLoc,
 				       &initData->gameObjs,
 				       memoryPoolCode);
-    
+#else
+    transform boatTransform = {};
+    boatTransform.location = spawnObjLoc;
+    boatTransform.rotation = QuaternionIdentity();
+    boatTransform.scale = {1.0f, 1.0f, 1.0f, 1.0f};
+    gameFrameworkCode->GameSpawnNewOBJ(spawnable_obj_type::sot_boat,
+				       boatTransform,
+				       &initData->gameObjs,
+				       memoryPoolCode);
+#endif    
     return(cameraResult);
 }
 
@@ -62,6 +73,7 @@ extern "C" SAIL_UPDATE(SailUpdate)
     //Update our input
     //Update our camera
 
+#if 0
     game_controller_input* controller = GetController(input, 0);
     r32 velocity = camera->movementSpeed * deltaTime;
     if (controller)
@@ -90,5 +102,7 @@ extern "C" SAIL_UPDATE(SailUpdate)
 	    camera->position = camera->position + (camera->right * velocity);
 	}
     }
+
+#endif    
     gameFrameworkCode->GameUpdateCamera(camera);
 }
