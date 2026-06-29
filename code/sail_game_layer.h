@@ -12,10 +12,25 @@
 #define GAME_CALL
 #endif
 
+struct boat_entity
+{
+    v4 qTargetRot;
+    v4 currRot;
+    v4 startRot;
+    
+    r32 currRotTime;
+    r32 lerpTimeSpeed;
+
+    spawned_obj_info* objInfo;
+};
+
 struct sail_initialize_data
 {
     game_loaded_objs gameObjs;
+
+    boat_entity boat;
 };
+
 
 struct platform_info
 {
@@ -26,7 +41,7 @@ struct platform_info
     
 };
 
-#define SAIL_UPDATE(name) void GAME_CALL name(game_framework_dll_code* gameFrameworkCode, memory_pool_dll_code* memoryPoolCode, game_input* input, game_camera* camera, r32 deltaTime)
+#define SAIL_UPDATE(name) void GAME_CALL name(game_framework_dll_code* gameFrameworkCode, memory_pool_dll_code* memoryPoolCode, game_input* input, game_camera* camera, r32 deltaTime, sail_initialize_data* initData)
 typedef SAIL_UPDATE(sail_update);
 
 //replace sail_initialize_data w/ game_camera, put sail_initialize_data as pointer and make it a magic function

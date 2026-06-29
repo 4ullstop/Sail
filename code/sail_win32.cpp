@@ -334,12 +334,30 @@ int CALLBACK WinMain(HINSTANCE hInstance,
     v4 fmRN = QuaternionRotationNormal(v, 30.f);
 
     DirectX::XMVECTOR xmRN = DirectX::XMQuaternionRotationNormal(xmV, 30.f);
+
+    v4 sin = VectorSin(v);
+
+    DirectX::XMVECTOR xmSin = DirectX::XMVectorSin(xmV);
+
+
+    v4 aTan = VectorATan(v);
+
+    DirectX::XMVECTOR xmATan = DirectX::XMVectorATan(xmV);
+    
+
+    
+    r32 scalar = 3.0f;
+    v4 vTwo = {v * scalar}; 
+    DirectX::XMVECTOR xmV2 = DirectX::XMVectorScale(xmV, 3.0f);
+    r32 t = 0.5f;
+    v4 t4 = {t, t, t, t};
+    v4 quat = QuaternionSlerpV(v, vTwo, t4);
+
+    DirectX::XMVECTOR xmt4 = DirectX::XMVectorSet(t, t, t, t);
+    DirectX::XMVECTOR xmQuat = DirectX::XMQuaternionSlerpV(xmV, xmV2, xmt4);
 #endif
 
-    
 
-
-    
     UINT desiredSchedulerMs = 1;
     bool32 sleepIsGranular = (timeBeginPeriod(desiredSchedulerMs) == TIMERR_NOERROR);
 
@@ -695,7 +713,7 @@ int CALLBACK WinMain(HINSTANCE hInstance,
 		//game code bc it's something we want to separate from the platform, and since
 		//I spent the time creating a separate math library, I would actually like to use it
 
-		SailUpdate(&gameFrameworkCode, &memoryPoolCode, newInput, &gameCamera, deltaTime);
+		SailUpdate(&gameFrameworkCode, &memoryPoolCode, newInput, &gameCamera, deltaTime, &sailInitData);
 
 
 		game_camera_data gCamData = {};
