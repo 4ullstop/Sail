@@ -22,6 +22,10 @@ struct boat_entity
     r32 lerpTimeSpeed;
 
     spawned_obj_info* objInfo;
+
+    i32 flag;
+
+    bool32 isRotating;
 };
 
 struct sail_initialize_data

@@ -1,5 +1,7 @@
 #include "sail_game_layer.h"
 
+
+
 extern "C" SAIL_INITIALIZE(SailInitialize)
 {
 
@@ -14,6 +16,7 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
     cameraResult.pitch = 0.0f;
     cameraResult.front = {0.0f, 0.0f, -1.0f, 0.0f};
     cameraResult.position = {-4.2f, 0.04f, 0.77f, 0.0f};
+//    cameraResult.position = {10.0f, 10.f, 10.0f, 10.f};
 
     cameraResult.movementSpeed = 5.0f;
 
@@ -25,7 +28,10 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
     cameraResult.aspect.y = aspectY;
     cameraResult.aspect.z = 0.0f;
     cameraResult.aspect.w = 0.0f;    
-    
+
+
+    cameraResult.inheritRotation = true;
+    cameraResult.inheritedRotation = QuaternionIdentity();
     gameFrameworkCode->GameCreateViewAndPerspective(&cameraResult);
 
     size_t objectArenaAllocSize = Megabytes(10);
@@ -72,32 +78,43 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
 
     initData->boat.lerpTimeSpeed = 0.5f;
     initData->boat.currRot =
-	initData->boat.startRot = boatTransform.rotation;
+	initData->boat.startRot =
+	initData->boat.qTargetRot = boatTransform.rotation;
 
 #endif    
     return(cameraResult);
 }
 
 internal void
-RotateBoat(boat_entity* boat, r32 deltaTime, bool32 resetTimer)
+RotateBoat(boat_entity* boat, r32 deltaTime)
 {
-    if (resetTimer || (boat->currRotTime >= 1.0f))
-    {
-	boat->currRotTime = 0.0f;
-	//reset when button repressed
-	boat->startRot = boat->currRot;
-    }
-    else
-    {
-	boat->currRotTime += boat->lerpTimeSpeed * deltaTime;
-	v4 rotTimeV = {boat->currRotTime, boat->currRotTime, boat->currRotTime, boat->currRotTime};
-	//use quaternion rotation before slerp
-	boat->currRot = QuaternionSlerpV(boat->startRot, boat->qTargetRot, rotTimeV);
-	boat->objInfo->modelTransform.rotation = boat->currRot;
-	boat->objInfo->modelMatrix = CreateModelMatrix(boat->objInfo->modelTransform.scale,
-						       boat->objInfo->modelTransform.rotation,
-						       boat->objInfo->modelTransform.location);
-    }
+    
+    boat->isRotating = boat->currRotTime >= 1.0f;
+    v4 rotTimeV = {boat->currRotTime, boat->currRotTime, boat->currRotTime, boat->currRotTime};
+    
+#if 1
+    r32 t = 1 - boat->lerpTimeSpeed;
+    v4 t4 = {t, t, t, t};
+    boat->currRot = QuaternionSlerpV(boat->startRot, boat->qTargetRot, t4);
+#else
+    boat->currRot = boat->qTargetRot;
+#endif	
+    boat->objInfo->modelTransform.rotation = boat->currRot;
+    boat->objInfo->modelMatrix = CreateModelMatrix(boat->objInfo->modelTransform.scale,
+						   boat->objInfo->modelTransform.rotation,
+						   boat->objInfo->modelTransform.location);
+
+}
+
+internal void
+CalculateNewCameraLocation(game_camera* camera, boat_entity* boat)
+{
+    v4 camOffset = {-4.2f, 0.04f, 0.77f, 0.0f};	    
+    v4 normRot = QuaternionNormalize(boat->currRot);
+    v4 invRot = QuaternionConjugate(normRot);
+    camera->targetForward = invRot;
+    camera->inheritedRotation = invRot;
+    camera->position = boat->objInfo->modelTransform.location + Vector3Rotate(camOffset, invRot);    
 }
 
 extern "C" SAIL_UPDATE(SailUpdate)
@@ -135,33 +152,49 @@ extern "C" SAIL_UPDATE(SailUpdate)
 	    camera->position = camera->position + (camera->right * velocity);
 	}
     }
-
 #endif
+    boat_entity* boat = &initData->boat; 
+
     if (controller)
     {
 	//eventually, it would be nice if the movement was also dependent
 	//on the velocity of the boat, meaning we turn more or less depending on how fast the boat
 	//is moving or if the boat is moving at all
-	v4 rotAdd = {0.0f, 2.0f, 0.0f, 0.0f};
 
+	i32 deg = 1; // * deltaTime ??
 	v4 zAxis = {0.0f, 1.0f, 0.0f, 0.0f};
-	bool32 resetTimer = false;
+
+	v4 camOffset = {-4.2f, 0.04f, 0.77f, 0.0f};	
+	camera->inheritedOffset = camOffset;
 	if (controller->moveLeft.endedDown)
 	{
-	    initData->boat.qTargetRot = initData->boat.currRot;
-	    initData->boat.qTargetRot += QuaternionRotationAxis(zAxis, (r32)RAD2DEG(10));
-	    resetTimer = true;
+	    boat->currRotTime += boat->lerpTimeSpeed * deltaTime;	    
+	    boat->qTargetRot = QuaternionNormalize(boat->qTargetRot);	    
+	    boat->qTargetRot = QuaternionMultiply(boat->qTargetRot,
+						  QuaternionRotationAxis(zAxis, (r32)DEG2RAD(deg)));
+
+
+	    RotateBoat(&initData->boat, deltaTime);
+
+	    CalculateNewCameraLocation(camera, boat);
 	}
 
 	if (controller->moveRight.endedDown)
 	{
-	    initData->boat.qTargetRot = initData->boat.currRot;
-	    initData->boat.qTargetRot += QuaternionRotationAxis(zAxis, (r32)RAD2DEG(-10));	    
-	    resetTimer = true;
+	    boat->qTargetRot = QuaternionNormalize(boat->qTargetRot);
+	    boat->qTargetRot = QuaternionMultiply(boat->qTargetRot,
+						  QuaternionRotationAxis(zAxis, (r32)DEG2RAD(-deg))); 
+
+
+	    RotateBoat(&initData->boat, deltaTime);
+
+	    CalculateNewCameraLocation(camera, boat);
 	}
 
-	RotateBoat(&initData->boat, deltaTime, resetTimer);
     }
     
+
     gameFrameworkCode->GameUpdateCamera(camera);
+
+
 }

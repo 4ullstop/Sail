@@ -44,6 +44,8 @@ global_variable thread_context blankThread;
 global_variable program_state programState;
 global_variable i64 perfCountFrequency;
 
+
+
 inline LARGE_INTEGER
 Sail32GetWallClock(void)
 {
@@ -186,6 +188,34 @@ CreateShaders(shaders* gameShaders)
 	fileResult.contentsSize,
 	&gameShaders->vertexInputLayout);
 
+    debug_read_file_result objectShaderResult = DEBUGPlatformReadEntireFile(&blankThread, "../build/objvs.cso");
+    bytes = (BYTE*)objectShaderResult.contents;
+    hr = d3dDevice->CreateVertexShader(objectShaderResult.contents,
+				       objectShaderResult.contentsSize,
+				       nullptr,
+				       &gameShaders->objectVertexShader);
+
+    D3D11_INPUT_ELEMENT_DESC objIaDesc[] =
+    {
+	{
+	    "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT,
+	    0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0
+	},
+
+	{
+	    "COLOR", 0, DXGI_FORMAT_R32G32B32_FLOAT,
+	    0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0
+	},
+    };
+
+    hr = d3dDevice->CreateInputLayout(
+	objIaDesc,
+	ArrayCount(objIaDesc),
+	bytes,
+	objectShaderResult.contentsSize,
+	&gameShaders->objectVertexInputLayout);
+    
+    
     debug_read_file_result pixelShaderResult = DEBUGPlatformReadEntireFile(&blankThread, "../build/ps.cso");
 
     bytes = (BYTE*)pixelShaderResult.contents;
@@ -271,6 +301,10 @@ Render(game_loaded_objs* gameObjs, win32_spawnable_objs* win32Objs, sail_constan
 	  Multiply them together scaleM * rotation * location == ModelMatrix
 	  Upload model matrix as opposed to Float4 to shader to be used
 	 */
+
+
+
+	
 	D3D11_MAPPED_SUBRESOURCE mapped;
 	hr = context->Map(cBuffers->dynamicVBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
 	object_constants* data = (object_constants*)mapped.pData;
@@ -278,9 +312,8 @@ Render(game_loaded_objs* gameObjs, win32_spawnable_objs* win32Objs, sail_constan
 	
 	DirectX::XMMATRIX dxMat = win32Code.Win32FromM4ToXMMATRIX(objInfo->modelMatrix);
 
-
+	
 	DirectX::XMStoreFloat4x4(&data->modelMat, dxMat);
-
 	context->Unmap(cBuffers->dynamicVBuffer, 0);
 
 	context->DrawIndexed(
@@ -355,9 +388,20 @@ int CALLBACK WinMain(HINSTANCE hInstance,
 
     DirectX::XMVECTOR xmt4 = DirectX::XMVectorSet(t, t, t, t);
     DirectX::XMVECTOR xmQuat = DirectX::XMQuaternionSlerpV(xmV, xmV2, xmt4);
+
+
+    v4 mulQ = QuaternionMultiply(v, v);
+    
+    DirectX::XMVECTOR dxMulQ = DirectX::XMQuaternionMultiply(xmV, xmV);
+
+    v4 rotQ = Vector3Rotate(v, mulQ);
+
+    DirectX::XMVECTOR dxRotQ = DirectX::XMVector3Rotate(xmV, dxMulQ);
 #endif
 
-
+    DirectX::XMVECTOR dxQE = DirectX::XMQuaternionRotationRollPitchYawFromVector(xmV);
+    v4 vQE = QuaternionFromEuler(v);
+    
     UINT desiredSchedulerMs = 1;
     bool32 sleepIsGranular = (timeBeginPeriod(desiredSchedulerMs) == TIMERR_NOERROR);
 
@@ -707,15 +751,26 @@ int CALLBACK WinMain(HINSTANCE hInstance,
 						      &programArenas->perFrameArena,
 						      &programState);
 
+
+
 		gameCamera.xChange = deltaTime * (0.3f * mouse.loc.x);
 		gameCamera.yChange = deltaTime * (0.3f * mouse.loc.y);
+
+
 		//The rest of the stuff (besides rendering) we see in win32_dx11.cpp should all be moved to our
 		//game code bc it's something we want to separate from the platform, and since
 		//I spent the time creating a separate math library, I would actually like to use it
-
 		SailUpdate(&gameFrameworkCode, &memoryPoolCode, newInput, &gameCamera, deltaTime, &sailInitData);
 
+#if 1		
+		boat_entity* boat = &sailInitData.boat;
+		char buffer[256];
+		sprintf_s(buffer, sizeof(buffer), "Delta Time: %f\n", deltaTime);
 
+
+		OutputDebugString(buffer);
+#endif
+		
 		game_camera_data gCamData = {};
 		gCamData.world = gameCamera.world;
 		gCamData.view = gameCamera.view;

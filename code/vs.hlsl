@@ -19,7 +19,7 @@ cbuffer ModelViewProjectionConstantBuffer : register(b0)
 
 cbuffer ModelWorldBuffer : register(b1)
 {
-	matrix modelWorld;
+	float4x4 modelWorld;
 }
 
 VS_OUTPUT main(VS_INPUT input)
