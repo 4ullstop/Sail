@@ -14,7 +14,6 @@ REM fxc compiler for shaders...
 REM start "C:\Program Files (x86)\Windows Kits\10\bin\10.0.18362.0\x64\fxc.exe" "L:\code\vshader.hlsl"
 
 fxc.exe -nologo /Od /Zi /T vs_5_0 /Fo vs.cso "S:\code\vs.hlsl"
-fxc.exe -nologo /Od /Zi /T vs_5_0 /Fo objvs.cso "S:\code\objvs.hlsl"
 fxc.exe -nologo /Od /Zi /T ps_5_0 /Fo ps.cso "S:\code\ps.hlsl"
 
 

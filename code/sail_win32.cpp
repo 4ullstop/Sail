@@ -187,33 +187,6 @@ CreateShaders(shaders* gameShaders)
 	bytes,
 	fileResult.contentsSize,
 	&gameShaders->vertexInputLayout);
-
-    debug_read_file_result objectShaderResult = DEBUGPlatformReadEntireFile(&blankThread, "../build/objvs.cso");
-    bytes = (BYTE*)objectShaderResult.contents;
-    hr = d3dDevice->CreateVertexShader(objectShaderResult.contents,
-				       objectShaderResult.contentsSize,
-				       nullptr,
-				       &gameShaders->objectVertexShader);
-
-    D3D11_INPUT_ELEMENT_DESC objIaDesc[] =
-    {
-	{
-	    "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT,
-	    0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0
-	},
-
-	{
-	    "COLOR", 0, DXGI_FORMAT_R32G32B32_FLOAT,
-	    0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0
-	},
-    };
-
-    hr = d3dDevice->CreateInputLayout(
-	objIaDesc,
-	ArrayCount(objIaDesc),
-	bytes,
-	objectShaderResult.contentsSize,
-	&gameShaders->objectVertexInputLayout);
     
     
     debug_read_file_result pixelShaderResult = DEBUGPlatformReadEntireFile(&blankThread, "../build/ps.cso");
@@ -295,15 +268,6 @@ Render(game_loaded_objs* gameObjs, win32_spawnable_objs* win32Objs, sail_constan
 	context->IASetVertexBuffers(0, 1, &drawBuffers->vertexBuffer, &stride, &offset);
 	context->IASetIndexBuffer(drawBuffers->indexBuffer, DXGI_FORMAT_R16_UINT, 0);
 
-	//How we set it up:
-	/*
-	  Convert all transformations (scale, rotation, location) into matrices
-	  Multiply them together scaleM * rotation * location == ModelMatrix
-	  Upload model matrix as opposed to Float4 to shader to be used
-	 */
-
-
-
 	
 	D3D11_MAPPED_SUBRESOURCE mapped;
 	hr = context->Map(cBuffers->dynamicVBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
@@ -311,7 +275,7 @@ Render(game_loaded_objs* gameObjs, win32_spawnable_objs* win32Objs, sail_constan
 
 	
 	DirectX::XMMATRIX dxMat = win32Code.Win32FromM4ToXMMATRIX(objInfo->modelMatrix);
-
+	dxMat = DirectX::XMMatrixTranspose(dxMat);
 	
 	DirectX::XMStoreFloat4x4(&data->modelMat, dxMat);
 	context->Unmap(cBuffers->dynamicVBuffer, 0);
@@ -534,7 +498,6 @@ int CALLBACK WinMain(HINSTANCE hInstance,
 
     sail_initialize_data sailInitData = {};
     game_camera gameCamera = SailInitialize(&sailInitData, &gameFrameworkCode, &memoryPoolCode, &platformInfo, &memory);
-
     
     D3D_FEATURE_LEVEL levels[] = {
 	D3D_FEATURE_LEVEL_11_1,
@@ -762,14 +725,34 @@ int CALLBACK WinMain(HINSTANCE hInstance,
 		//I spent the time creating a separate math library, I would actually like to use it
 		SailUpdate(&gameFrameworkCode, &memoryPoolCode, newInput, &gameCamera, deltaTime, &sailInitData);
 
-#if 1		
+#if 0
 		boat_entity* boat = &sailInitData.boat;
 		char buffer[256];
-		sprintf_s(buffer, sizeof(buffer), "Delta Time: %f\n", deltaTime);
+		sprintf_s(buffer, sizeof(buffer), "Boat Rotation: %f, %f, %f\n",
+			  boat->currRot.x,
+			  boat->currRot.y,
+			  boat->currRot.z);
 
 
 		OutputDebugString(buffer);
+
+#else
+		boat_entity* boat = &sailInitData.boat;
+		char buffer[256];
+		sprintf_s(buffer, sizeof(buffer), "Boat Pitch, Yaw: %f, %f\n",
+			  boat->pitch,
+			  boat->yaw);
+
+
+
+
+
+		OutputDebugString(buffer);
+		
 #endif
+
+		
+
 		
 		game_camera_data gCamData = {};
 		gCamData.world = gameCamera.world;

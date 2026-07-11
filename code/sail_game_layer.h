@@ -12,20 +12,92 @@
 #define GAME_CALL
 #endif
 
+enum sail_orientation
+{
+    so_closeHauled = 0,
+    so_closeReach = 22,
+    so_beamReach = 45,
+    so_broadReach = 67,
+    so_running = 90,
+};
+
+enum tack_orientation
+{
+    to_starboard,
+    to_port
+};
+
+struct sail_type
+{
+    tack_orientation tackOrientation;
+    sail_orientation sailOrientation;
+
+    v4 qSailRot;
+    v4 qTargetRot;
+    v4 sailForward;
+    v4 startRot;
+
+    v4 locationOffset;
+    
+    r32 pitch;
+    r32 yaw;
+};
+
+struct sailing
+{
+    v4 windDirection;
+    r32 windSpeed;
+    sail_type mainSail;
+};
+
+enum static_cam_location
+{
+    scl_center,
+    scl_left,
+    scl_right
+};
+
+enum boat_cam_mode
+{
+    bcm_steer,
+    bcm_winch
+};
+
 struct boat_entity
 {
+
+    boat_cam_mode boatCameraMode;
+//Quaternions
     v4 qTargetRot;
     v4 currRot;
     v4 startRot;
+
+    //Vectors
+    v4 forward;
+    v4 up;
+
+
+    r32 pitch;
+    r32 yaw;
     
     r32 currRotTime;
     r32 lerpTimeSpeed;
 
     spawned_obj_info* objInfo;
-
+    spawned_obj_info* mast;
     i32 flag;
 
     bool32 isRotating;
+    static_cam_location staticCamLocation;
+
+    v4 centerCamOffset;
+    v4 leftCamOffset;
+    v4 rightCamOffset;
+    v4 currCamOffset;
+
+    v4 movementSpeed;
+
+    sailing sailInfo;
 };
 
 struct sail_initialize_data
@@ -35,7 +107,6 @@ struct sail_initialize_data
     boat_entity boat;
 };
 
-
 struct platform_info
 {
     v2 aspect;
@@ -44,6 +115,28 @@ struct platform_info
 
     
 };
+
+    
+struct inherited_location_info
+{
+    v4 inheritedRotation;
+    v4 targetForward;
+    v4 position;
+};
+
+inline v4
+GetForwardVector(r32 pitch, r32 yaw)
+{
+    v4 result =
+    {
+	(r32)(cosf(pitch) * sin(yaw)),
+	(r32)(sinf(pitch)),
+	(r32)(cosf(yaw) * cosf(pitch))
+    };
+
+    result = NormalizeV3(result);
+    return(result);
+}
 
 #define SAIL_UPDATE(name) void GAME_CALL name(game_framework_dll_code* gameFrameworkCode, memory_pool_dll_code* memoryPoolCode, game_input* input, game_camera* camera, r32 deltaTime, sail_initialize_data* initData)
 typedef SAIL_UPDATE(sail_update);
