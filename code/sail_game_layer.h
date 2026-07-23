@@ -27,6 +27,12 @@ enum tack_orientation
     to_port
 };
 
+struct angle_comparison
+{
+    r32 currentAngle;
+    r32 previousAngle;
+};
+
 struct sail_type
 {
     tack_orientation tackOrientation;
@@ -41,6 +47,8 @@ struct sail_type
     
     r32 pitch;
     r32 yaw;
+    
+    angle_comparison sailToBoat;
 };
 
 struct sailing
@@ -63,6 +71,14 @@ enum boat_cam_mode
     bcm_winch
 };
 
+struct wind_sock
+{
+    spawned_obj_info* model;
+    v4 startRot;
+    v4 currRot;
+    v4 targetRot;
+};
+
 struct boat_entity
 {
 
@@ -76,6 +92,9 @@ struct boat_entity
     v4 forward;
     v4 up;
 
+    wind_sock windSock;
+
+    r32 boatToWindAngle;
 
     r32 pitch;
     r32 yaw;
@@ -85,6 +104,7 @@ struct boat_entity
 
     spawned_obj_info* objInfo;
     spawned_obj_info* mast;
+
     i32 flag;
 
     bool32 isRotating;
@@ -95,7 +115,9 @@ struct boat_entity
     v4 rightCamOffset;
     v4 currCamOffset;
 
-    v4 movementSpeed;
+    r32 topSpeed;
+    r32 bottomSpeed;
+    r32 movementSpeed;
 
     sailing sailInfo;
 };
@@ -123,6 +145,7 @@ struct inherited_location_info
     v4 targetForward;
     v4 position;
 };
+
 
 inline v4
 GetForwardVector(r32 pitch, r32 yaw)

@@ -725,30 +725,65 @@ int CALLBACK WinMain(HINSTANCE hInstance,
 		//I spent the time creating a separate math library, I would actually like to use it
 		SailUpdate(&gameFrameworkCode, &memoryPoolCode, newInput, &gameCamera, deltaTime, &sailInitData);
 
-#if 0
+
 		boat_entity* boat = &sailInitData.boat;
+		sail_type* main = &boat->sailInfo.mainSail;
+#if 1
 		char buffer[256];
-		sprintf_s(buffer, sizeof(buffer), "Boat Rotation: %f, %f, %f\n",
-			  boat->currRot.x,
-			  boat->currRot.y,
-			  boat->currRot.z);
+		sprintf_s(buffer, sizeof(buffer), "Sail Rot: %f, %f, %f, %f\n",
+			  main->qSailRot.x,
+			  main->qSailRot.y,
+			  main->qSailRot.z,
+			  main->qSailRot.w);
 
 
+		    
 		OutputDebugString(buffer);
 
 #else
-		boat_entity* boat = &sailInitData.boat;
+
+
+
+		char speed[256];
+		sprintf_s(speed, sizeof(speed), "Boat Speed: %f\n",
+			  boat->movementSpeed);
+
+
+
+
+		OutputDebugString(speed);
+		
+
 		char buffer[256];
-		sprintf_s(buffer, sizeof(buffer), "Boat Pitch, Yaw: %f, %f\n",
-			  boat->pitch,
-			  boat->yaw);
+		sprintf_s(buffer, sizeof(buffer), "Boat location: %f, %f, %f\n",
+			  boat->objInfo->modelTransform.location.x,
+			  boat->objInfo->modelTransform.location.y,
+			  boat->objInfo->modelTransform.location.z);
+
+		char forwardBuffer[256];
+		sprintf_s(forwardBuffer, sizeof(forwardBuffer), "Sail forward: %f, %f, %f\n",
+			  main->sailForward.x,
+			  main->sailForward.y,
+			  main->sailForward.z);
+
+		char boatForward[256];
+		sprintf_s(boatForward, sizeof(boatForward), "Boat forward: %f, %f, %f\n",
+			  boat->forward.x,
+			  boat->forward.y,
+			  boat->forward.z);
 
 
-
-
+		char windForward[256];
+		sprintf_s(windForward, sizeof(windForward), "Wind forward: %f, %f, %f\n",
+			  boat->sailInfo.windDirection.x,
+			  boat->sailInfo.windDirection.y,
+			  boat->sailInfo.windDirection.z);
 
 		OutputDebugString(buffer);
-		
+		OutputDebugString(forwardBuffer);
+		OutputDebugString(boatForward);
+		OutputDebugString(windForward);
+		OutputDebugString("\n");
 #endif
 
 		
