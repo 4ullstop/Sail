@@ -18,52 +18,102 @@ GetForwardFromQuat(v4 inQuat, r32* pitch, r32* yaw)
     return(result);
 }
 
+internal bool32
+IsAngleRightSide(r32 angle)
+{
+    if (angle < 0.0f)
+    {
+	if ((angle >= -90.0f) && (angle < 0.0f))
+	{
+	    return(true);
+	}
+	else
+	{
+	    return(false);
+	}
+    }
+    else
+    {
+	if ((angle >= 0.0f) && (angle < 90.0f))
+	{
+	    return(true);
+	}
+	else
+	{
+	    return(false);
+	}
+    }    
+}
+
+internal r32
+CalculateRegularDropOff(r32 x, r32 y, r32 radius)
+{
+    r32 distance = (r32)fabs(y - x);
+    r32 z = 1.0f - (distance / radius);
+    r32 result = (r32)Max(0.0f, Min(z, 1.0f));
+    return(result);
+}
+
+internal r32
+CalculateSmoothDropOff(r32 x, r32 y, r32 sigma)
+{
+    r32 delta = y - x;
+    r32 result = (r32)expf(-(delta * delta) / (2.0f * sigma * sigma));
+    return(result);
+}
+
 internal void
 UpdateBoatVectors(boat_entity* boat)
 {
     boat->forward = GetForwardFromQuat(boat->currRot, &boat->pitch, &boat->yaw);
     sail_type* main = &boat->sailInfo.mainSail;
+    v4 tempSailForward = {};
+    
     main->sailForward = GetForwardFromQuat(main->qSailRot, &main->pitch, &main->yaw);
-//    main->sailForward = boat->forward + main->sailForward;
+    r32 convertedYaw = main->yaw - (r32)DEG2RAD(45);
+    tempSailForward = GetForwardFromQuat(main->sailForward, &main->pitch, &convertedYaw);
+    tempSailForward = NormalizeV3(tempSailForward);
+    tempSailForward = NegateVector(tempSailForward);
     main->sailForward = NormalizeV3(main->sailForward);
     main->sailForward = NegateVector(main->sailForward);
     //Now that we have the forwards of both of the objects we can compare against the boat and the wind direction
 
     //boat vs wind dir
     //sail vs wind dir
+
+#if 0        
     v4 boatDotWind = DotV3(boat->forward, boat->sailInfo.windDirection);
     r32 bDw = boatDotWind.x;
 
     r32 movementAffect = 1.0f;
-#if 0    
-
-    v4 sailDotWind = DotV3(main->sailForward, boat->sailInfo.windDirection);
 
 
+//get curr forward, convert to euler, subtract like 45deg, recalculate quat forward based on subtraction
 
-
-    r32 sDw = sailDotWind.x;
-    
-    r32 s = (r32)fabs(bDw - sDw);
-
-#else
-    v4 sailDotBoat = DotV3(main->sailForward, boat->forward);
+    v4 sailDotBoat = DotV3(tempSailForward, boat->forward);
     r32 sDb = sailDotBoat.x;
     
-#if 0
-    sDb = (r32)fabs(sDb);
-    bDw = (r32)fabs(bDw);
-#endif
+
 
     r32 bp = 1 - bDw;
     r32 sp = 1 - sDb;
     //the greater the difference between the min and max of these two numbers, the slower we go
 
-    r32 max = Max(bp, sp);
-    r32 min = Min(bp, sp);
+    r32 decay = 0.5f;
+    
+    r32 max = Max(bDw, sDb);
+    r32 min = Min(bDw, sDb);
 
     //Currently the function is linear, it would probably be better if it were exponential
-    r32 s =  1 - (max - min);
+#if 0
+    r32 s =  1 - ((max - min) * 0.5f);
+    s *= 0.2f;
+#else
+    r32 decayRate = 2.0f;
+    r32 s = expf(-decayRate * ((max - min) * 2.0f));
+#endif    
+
+
 
     v4 up = {0.0f, 1.0f, 0.0f, 0.0f};
     
@@ -76,6 +126,9 @@ UpdateBoatVectors(boat_entity* boat)
 
     i32 sign = 1;
     r32 boatLeftDotWind = -boatRightDotWind.x;
+
+
+
     if ((boatRightDotWind.x > 0.0f) && (sailRightDotBoat.x < 0.0f))
     {
 
@@ -95,16 +148,69 @@ UpdateBoatVectors(boat_entity* boat)
 	    sign = -1;
 	}
     }
+#else
+    //Get the signed axis between the sail and the wind to determine if the sail is in the wrong
+    //direction to the wind
+
+    r32 s = 0.0f;
+    v2 u = {boat->forward.x, boat->forward.z};
+    v2 v = {-boat->sailInfo.windDirection.x, -boat->sailInfo.windDirection.z};
+
+    r32 angle = (r32)atan2((u.x * v.y) - (u.y * v.x), (u.x * v.x) + (u.y * v.y));
+    boat->windAngle = (r32)RAD2DEG(angle);
+
+    v = {main->sailForward.x, main->sailForward.z};
+    angle = (r32)atan2((u.x * v.y) - (u.y * v.x), (u.x * v.x) + (u.y * v.y));
+
+    boat->sailAngle = (r32)RAD2DEG(angle);
+
+    r32 diff = (r32)(fabs(fabs(boat->windAngle) - fabs(boat->sailAngle)));
+    r32 half = (r32)fabs(boat->windAngle / 2.0f);
+
+    //Okay lets get crazy and use it twice
+    if ((boat->windAngle > - 15.0f) && (boat->windAngle < 15.0f))
+    {
+	if (boat->sailAngle < 0.0f)
+	{
+	    half = 180.0f;
+	}
+    }
+    
+    
+    r32 closerToZero = CalculateRegularDropOff(0.0f, half, 5.0f);
+    r32 sigma = Lerp(4.0f, 7.0f, closerToZero);
+    
+    s = CalculateSmoothDropOff(half, diff, 8);
 
     
+    u = v;
+    v = {boat->forward.x, boat->forward.z};
 
-#endif
+    angle = (r32)atan2((u.x * v.y) - (u.y * v.x), (u.x * v.x) + (u.y * v.y));    
+
+    bool32 sailIsRight = IsAngleRightSide(boat->sailAngle);
+    bool32 boatIsRight = IsAngleRightSide(boat->windAngle);
+
+    i32 sign = 1;
     
+    boat->boatToSail = (r32)RAD2DEG(angle);
+    
+    if ((boat->windAngle > 0.0f) && (boat->sailAngle > 0.0f))
+    {
+	s = 0.1f;
+	sign = -1;
+    }
+    
+
+
+#endif    
+
     r32 p = Lerp(boat->bottomSpeed, boat->topSpeed, s);
-    
+#if 1
     boat->movementSpeed = p * sign;
-
-
+#else
+    boat->movementSpeed = s;
+#endif    
 }
 
 internal void
@@ -189,7 +295,7 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
     cameraResult.startAt = {0.0f, -0.1f, 0.0f, 0.f};
     cameraResult.startUp = {0.0f, 1.0f, 0.0f, 0.f};
 
-    cameraResult.yaw = -90.0f;
+    cameraResult.yaw = -0.0f;
     cameraResult.pitch = 0.0f;
     cameraResult.front = {0.0f, 0.0f, -1.0f, 0.0f};
     cameraResult.position = {-4.2f, 0.04f, 0.77f, 0.0f};
@@ -211,7 +317,8 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
     cameraResult.inheritedRotation = QuaternionIdentity();
     gameFrameworkCode->GameCreateViewAndPerspective(&cameraResult);
 
-    size_t objectArenaAllocSize = Megabytes(10);
+    //this seems really large and really weird, how can we make our objs smaller? less faces
+    size_t objectArenaAllocSize = Megabytes(30);
 
     platformInfo->frameworkArenas.spawnedObjectArena =
 	(memory_arena*)memoryPoolCode->PushStruct(platformInfo->frameworkArenas.setupArena, sizeof(memory_arena));
@@ -229,12 +336,13 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
     char* refCubePath = "../data/obj/move_ref.obj";
     char* windSockPath = "../data/obj/wind_sock.obj";
     char* axesPath = "../data/obj/axes.obj";
-    char* paths[256] = {boatPath, mastPath, refCubePath, windSockPath, axesPath};
+    char* arrowPath = "../data/obj/forward_arrow.obj";
+    char* paths[256] = {boatPath, mastPath, refCubePath, windSockPath, axesPath, arrowPath};
 
     
     initData->gameObjs = gameFrameworkCode->GameLoadOBJFiles(platformInfo->parseObjCode,
 								      &platformInfo->frameworkArenas,
-								      pgMem, memoryPoolCode, paths, 5);
+								      pgMem, memoryPoolCode, paths, 6);
 
     v4 spawnObjLoc = v4{0.0f, 0.0f, 10.0f, 1.0f};
     v4 oneScale = {1.0f, 1.0f, 1.0f, 1.0f};
@@ -246,10 +354,11 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
 #else
 
     v4 axesRot = {1.0f, 0.0f, 0.0f, 0.0f};
-    
+
+
     transform axesTransform = {};
     axesTransform.location = {0.0f, 0.0f, 0.0f, 0.0f};
-    axesTransform.rotation = CreateQuaternionRotationFromVector(axesRot);
+    axesTransform.rotation = QuaternionIdentity();
     axesTransform.scale = oneScale;
     gameFrameworkCode->GameSpawnNewOBJ(spawnable_obj_type::sot_axes,
 				       axesTransform,
@@ -257,10 +366,22 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
 				       memoryPoolCode,
 				       false,
 				       Identity());
+
+    transform forwardArrowTransform = {};
+    forwardArrowTransform.location = {0.0f, 0.0f, 0.0f, 0.0f};
+    forwardArrowTransform.rotation = CreateQuaternionRotationFromVector(axesRot);
+    forwardArrowTransform.scale = oneScale;
+
+    gameFrameworkCode->GameSpawnNewOBJ(spawnable_obj_type::sot_forward_arrow,
+				       forwardArrowTransform,
+				       &initData->gameObjs,
+				       memoryPoolCode,
+				       false,
+				       Identity());
     
     
     transform refCubeTransform = {};
-    refCubeTransform.location = {4.0f, 0.0f, -10.0f, 0.0f};
+    refCubeTransform.location = {6.0f, 0.0f, -10.0f, 0.0f};
     refCubeTransform.rotation = QuaternionIdentity();
     refCubeTransform.scale = oneScale;
 
@@ -344,7 +465,7 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
     initData->boat.rightCamOffset = {camOffset.x + 1.0f, camOffset.y, camOffset.z, camOffset.w};
 
 
-    initData->boat.topSpeed = 2.f;
+    initData->boat.topSpeed = 5.f;
     initData->boat.movementSpeed =     
 	initData->boat.bottomSpeed = 1.0f;
 
@@ -513,7 +634,7 @@ extern "C" SAIL_UPDATE(SailUpdate)
 	    camera->position = camera->position + (camera->right * velocity);
 	}
     }
-#endif
+#else
     boat_entity* boat = &initData->boat; 
 
     if (controller)
@@ -679,7 +800,7 @@ extern "C" SAIL_UPDATE(SailUpdate)
 
 	windSock->model->modelMatrix = windMat;
     }
-
+#endif
     gameFrameworkCode->GameUpdateCamera(camera);
 
 

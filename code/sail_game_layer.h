@@ -94,8 +94,11 @@ struct boat_entity
 
     wind_sock windSock;
 
-    r32 boatToWindAngle;
+    r32 windAngle;
+    r32 sailAngle;
 
+    r32 boatToSail;
+    
     r32 pitch;
     r32 yaw;
     

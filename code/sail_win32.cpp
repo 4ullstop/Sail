@@ -361,10 +361,23 @@ int CALLBACK WinMain(HINSTANCE hInstance,
     v4 rotQ = Vector3Rotate(v, mulQ);
 
     DirectX::XMVECTOR dxRotQ = DirectX::XMVector3Rotate(xmV, dxMulQ);
-#endif
+
 
     DirectX::XMVECTOR dxQE = DirectX::XMQuaternionRotationRollPitchYawFromVector(xmV);
     v4 vQE = QuaternionFromEuler(v);
+#endif
+
+    DirectX::XMVECTOR forward = {1.0f, 0.0f, 0.0f, 0.0f};
+    DirectX::XMVECTOR up = {0.0f, 1.0f, 0.0f, 0.0f};
+
+    DirectX::XMMATRIX lookAt = DirectX::XMMatrixLookToLH(DirectX::XMVectorZero(), forward, up);
+    DirectX::XMMATRIX rotMat = DirectX::XMMatrixTranspose(lookAt);
+    DirectX::XMVECTOR quat = DirectX::XMQuaternionRotationMatrix(rotMat);
+
+    v4 vForward = {1.0f, 0.0f, 0.0f, 0.0f};
+    
+    v4 test = CreateQuaternionRotationFromVector(vForward);
+    
     
     UINT desiredSchedulerMs = 1;
     bool32 sleepIsGranular = (timeBeginPeriod(desiredSchedulerMs) == TIMERR_NOERROR);
@@ -728,65 +741,37 @@ int CALLBACK WinMain(HINSTANCE hInstance,
 
 		boat_entity* boat = &sailInitData.boat;
 		sail_type* main = &boat->sailInfo.mainSail;
-#if 1
-		char buffer[256];
-		sprintf_s(buffer, sizeof(buffer), "Sail Rot: %f, %f, %f, %f\n",
-			  main->qSailRot.x,
-			  main->qSailRot.y,
-			  main->qSailRot.z,
-			  main->qSailRot.w);
 
-
-		    
-		OutputDebugString(buffer);
-
-#else
-
-
-
-		char speed[256];
-		sprintf_s(speed, sizeof(speed), "Boat Speed: %f\n",
-			  boat->movementSpeed);
-
-
-
-
-		OutputDebugString(speed);
-		
-
-		char buffer[256];
-		sprintf_s(buffer, sizeof(buffer), "Boat location: %f, %f, %f\n",
-			  boat->objInfo->modelTransform.location.x,
-			  boat->objInfo->modelTransform.location.y,
-			  boat->objInfo->modelTransform.location.z);
-
-		char forwardBuffer[256];
-		sprintf_s(forwardBuffer, sizeof(forwardBuffer), "Sail forward: %f, %f, %f\n",
+#if 0
+		char sailBuffer[256];
+		sprintf_s(sailBuffer, sizeof(sailBuffer), "Sail Forward: %f, %f, %f\n",
 			  main->sailForward.x,
 			  main->sailForward.y,
 			  main->sailForward.z);
-
-		char boatForward[256];
-		sprintf_s(boatForward, sizeof(boatForward), "Boat forward: %f, %f, %f\n",
-			  boat->forward.x,
-			  boat->forward.y,
-			  boat->forward.z);
-
-
-		char windForward[256];
-		sprintf_s(windForward, sizeof(windForward), "Wind forward: %f, %f, %f\n",
-			  boat->sailInfo.windDirection.x,
-			  boat->sailInfo.windDirection.y,
-			  boat->sailInfo.windDirection.z);
-
-		OutputDebugString(buffer);
-		OutputDebugString(forwardBuffer);
-		OutputDebugString(boatForward);
-		OutputDebugString(windForward);
-		OutputDebugString("\n");
+			  
+		OutputDebugString(sailBuffer);
+#else
+#if 1
+		char speed[256];
+		sprintf_s(speed, sizeof(speed), "Speed: %f\n",
+			  boat->movementSpeed);
+			  
+		OutputDebugString(speed);
+#endif
+#if 0
+		char sailBoatAngle[256];
+		sprintf_s(sailBoatAngle, sizeof(sailBoatAngle), "Sail angle: %f\n",
+			  boat->sailAngle);
+			  
+		OutputDebugString(sailBoatAngle);
+		char boatWindAngle[256];
+		sprintf_s(boatWindAngle, sizeof(boatWindAngle), "Boat To Wind Angle: %f\n",
+			  boat->windAngle);
+			  
+		OutputDebugString(boatWindAngle);
+#endif		
 #endif
 
-		
 
 		
 		game_camera_data gCamData = {};
