@@ -67,9 +67,15 @@ struct object_constants
     DirectX::XMFLOAT4X4 modelMat;
 };
 
+struct material_constants
+{
+    DirectX::XMFLOAT4 hasMaterials;
+};
+
 struct sail_constant_buffers
 {
     ID3D11Buffer* dynamicVBuffer;
+    ID3D11Buffer* dynamicPBuffer;
 };
 
 #define SAIL_WIN32_H

@@ -1,5 +1,8 @@
 #include "sail_game_layer.h"
 
+
+#include "D:/ExternalCustomAPIs/OBJLoader/code/mtl_parser.cpp"
+
 //Sailing mechanic
 
 internal v4
@@ -67,13 +70,7 @@ UpdateBoatVectors(boat_entity* boat)
 {
     boat->forward = GetForwardFromQuat(boat->currRot, &boat->pitch, &boat->yaw);
     sail_type* main = &boat->sailInfo.mainSail;
-    v4 tempSailForward = {};
-    
     main->sailForward = GetForwardFromQuat(main->qSailRot, &main->pitch, &main->yaw);
-    r32 convertedYaw = main->yaw - (r32)DEG2RAD(45);
-    tempSailForward = GetForwardFromQuat(main->sailForward, &main->pitch, &convertedYaw);
-    tempSailForward = NormalizeV3(tempSailForward);
-    tempSailForward = NegateVector(tempSailForward);
     main->sailForward = NormalizeV3(main->sailForward);
     main->sailForward = NegateVector(main->sailForward);
     //Now that we have the forwards of both of the objects we can compare against the boat and the wind direction
@@ -81,81 +78,12 @@ UpdateBoatVectors(boat_entity* boat)
     //boat vs wind dir
     //sail vs wind dir
 
-#if 0        
-    v4 boatDotWind = DotV3(boat->forward, boat->sailInfo.windDirection);
-    r32 bDw = boatDotWind.x;
-
-    r32 movementAffect = 1.0f;
-
-
-//get curr forward, convert to euler, subtract like 45deg, recalculate quat forward based on subtraction
-
-    v4 sailDotBoat = DotV3(tempSailForward, boat->forward);
-    r32 sDb = sailDotBoat.x;
-    
-
-
-    r32 bp = 1 - bDw;
-    r32 sp = 1 - sDb;
-    //the greater the difference between the min and max of these two numbers, the slower we go
-
-    r32 decay = 0.5f;
-    
-    r32 max = Max(bDw, sDb);
-    r32 min = Min(bDw, sDb);
-
-    //Currently the function is linear, it would probably be better if it were exponential
-#if 0
-    r32 s =  1 - ((max - min) * 0.5f);
-    s *= 0.2f;
-#else
-    r32 decayRate = 2.0f;
-    r32 s = expf(-decayRate * ((max - min) * 2.0f));
-#endif    
-
-
-
-    v4 up = {0.0f, 1.0f, 0.0f, 0.0f};
-    
-    v4 boatRight = NormalizeV4(CrossV3(boat->forward, up));
-    v4 boatRightDotWind = DotV3(boatRight, boat->sailInfo.windDirection);
-
-    v4 sailRight = NormalizeV4(CrossV3(main->sailForward, up));
-    v4 sailRightDotBoat = DotV3(sailRight, boat->forward);
-
-
-    i32 sign = 1;
-    r32 boatLeftDotWind = -boatRightDotWind.x;
-
-
-
-    if ((boatRightDotWind.x > 0.0f) && (sailRightDotBoat.x < 0.0f))
-    {
-
-	//We have problem
-	if (boatLeftDotWind < 0.0f)
-	{
-	    s = 0.1f;
-	    sign = -1;
-	}
-    }
-    else if ((boatRightDotWind.x < 0.0f) && (sailRightDotBoat.x > 0.0f))
-    {
-	//We also have problem
-	if (boatLeftDotWind > 0.0f)
-	{
-	    s = 0.1f;
-	    sign = -1;
-	}
-    }
-#else
     //Get the signed axis between the sail and the wind to determine if the sail is in the wrong
     //direction to the wind
 
     r32 s = 0.0f;
     v2 u = {boat->forward.x, boat->forward.z};
     v2 v = {-boat->sailInfo.windDirection.x, -boat->sailInfo.windDirection.z};
-
     r32 angle = (r32)atan2((u.x * v.y) - (u.y * v.x), (u.x * v.x) + (u.y * v.y));
     boat->windAngle = (r32)RAD2DEG(angle);
 
@@ -200,29 +128,11 @@ UpdateBoatVectors(boat_entity* boat)
 	s = 0.1f;
 	sign = -1;
     }
-    
-
-
-#endif    
 
     r32 p = Lerp(boat->bottomSpeed, boat->topSpeed, s);
-#if 1
+
     boat->movementSpeed = p * sign;
-#else
-    boat->movementSpeed = s;
-#endif    
 }
-
-internal void
-UpdateSailOrientations(boat_entity* boat)
-{
-//now we just have to do the calculations like how we did with the camera just with the sails
-    //to get our orientation and then use it to compare against the boat,
-    //once we get this angle in combination with getting the angle of the boat and the wind direction,
-    //there should be a way to compare everything and put it into a number for the purposes of calculating
-    //the speed of the boat
-}
-
 
 internal inherited_location_info
 CalculateNewInheritedLocation(v4 offset, v4 rotation, v4 location)
@@ -318,7 +228,7 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
     gameFrameworkCode->GameCreateViewAndPerspective(&cameraResult);
 
     //this seems really large and really weird, how can we make our objs smaller? less faces
-    size_t objectArenaAllocSize = Megabytes(30);
+    size_t objectArenaAllocSize = Megabytes(50);
 
     platformInfo->frameworkArenas.spawnedObjectArena =
 	(memory_arena*)memoryPoolCode->PushStruct(platformInfo->frameworkArenas.setupArena, sizeof(memory_arena));
@@ -331,7 +241,7 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
 
 
     char* icoPath = "../data/obj/debug_ico.obj";
-    char* boatPath = "../data/obj/boat_V1.obj";
+    char* boatPath = "../data/obj/boat_V2.obj";
     char* mastPath = "../data/obj/boat_V1_mast.obj";
     char* refCubePath = "../data/obj/move_ref.obj";
     char* windSockPath = "../data/obj/wind_sock.obj";
@@ -341,9 +251,17 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
 
     
     initData->gameObjs = gameFrameworkCode->GameLoadOBJFiles(platformInfo->parseObjCode,
-								      &platformInfo->frameworkArenas,
-								      pgMem, memoryPoolCode, paths, 6);
+							     &platformInfo->frameworkArenas,
+							     pgMem, memoryPoolCode, paths, 6);
 
+#if 0    
+    char* filename = "../data/obj/axes.mtl";
+    ParseMTLData(filename,
+		 platformInfo->frameworkArenas.perFrameArena,
+		 platformInfo->frameworkArenas.setupArena,
+		 pgMem,
+		 memoryPoolCode);
+#endif
     v4 spawnObjLoc = v4{0.0f, 0.0f, 10.0f, 1.0f};
     v4 oneScale = {1.0f, 1.0f, 1.0f, 1.0f};
 #if 0
@@ -645,11 +563,9 @@ extern "C" SAIL_UPDATE(SailUpdate)
 	//Q
 
 	sail_type* main = &boat->sailInfo.mainSail;
-#if 1
+
 	r32 velocity = boat->movementSpeed * deltaTime;
-#else
-	r32 velocity = 2.0f * deltaTime;
-#endif	
+
 	wind_sock* windSock = &boat->windSock;
 	
 	boat->objInfo->modelTransform.location = boat->objInfo->modelTransform.location + (boat->forward * velocity);
@@ -775,11 +691,9 @@ extern "C" SAIL_UPDATE(SailUpdate)
 
 
 	//Updating the wind sock so I can tell what direction the wind is going
-#if 1
+
 	v4 clearWind = NormalizeV4(boat->sailInfo.windDirection);
-#else
-	v4 clearWind = NormalizeV4(boat->forward);
-#endif	
+
 	v4 windRotation = CreateQuaternionRotationFromVector(clearWind);
 	windRotation = QuaternionNormalize(windRotation);
 	v4 offset = {0.7f, -0.4f, 5.2f, 0.0f};

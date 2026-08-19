@@ -262,6 +262,14 @@ Render(game_loaded_objs* gameObjs, win32_spawnable_objs* win32Objs, sail_constan
 	draw_buffers* drawBuffers = GetDrawBuffersFromSpawnable(win32Objs, objInfo);
 	context->VSSetConstantBuffers(1, 1, &cBuffers->dynamicVBuffer);
 
+	/*
+	  Update vertex position color to have MATERIAL_ID and update InputDescription to include this too
+	  Then Create a material Properties to represent the structue of a material,
+	  Using MATERIAL_ID passed to the pixel shader, find the material based on a look up using
+	  StructedBuffer<MaterialProperties> AllMaterials : register(t0)
+	  ^^You need to create this in DX11 code as well, then you need to assign the array per object being rendered
+	 */
+	
 	UINT stride = sizeof(vertex_position_color);
 	UINT offset = 0;
 
@@ -280,6 +288,20 @@ Render(game_loaded_objs* gameObjs, win32_spawnable_objs* win32Objs, sail_constan
 	DirectX::XMStoreFloat4x4(&data->modelMat, dxMat);
 	context->Unmap(cBuffers->dynamicVBuffer, 0);
 
+	context->PSSetConstantBuffers(0, 1, &cBuffers->dynamicPBuffer);
+	hr = context->Map(cBuffers->dynamicPBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
+	material_constants* matData = (material_constants*)mapped.pData;
+	DirectX::XMVECTOR storedMatData = {};
+	storedMatData = DirectX::XMVectorSetX(storedMatData, (r32)drawBuffers->hasMaterials);
+	DirectX::XMStoreFloat4(&matData->hasMaterials, storedMatData);
+	context->Unmap(cBuffers->dynamicPBuffer, 0);
+
+	if (drawBuffers->materialBuffer != nullptr)
+	{
+	    context->PSSetShaderResources(0, 1, &drawBuffers->materialResourceView);
+	    context->PSSetShaderResources(1, 1, &drawBuffers->materialPropertiesView);
+	}
+	
 	context->DrawIndexed(
 	    drawBuffers->indexCount,
 	    0,
@@ -422,7 +444,7 @@ int CALLBACK WinMain(HINSTANCE hInstance,
 
     program_memory memory = {};
 
-    memory.transientStorageSize = Megabytes(64);
+    memory.transientStorageSize = Megabytes(200);
     memory.permanentStorageSize = Gigabytes(1);
 
     memoryPoolCode.PoolAlloc(0, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE, &memory);
@@ -430,7 +452,7 @@ int CALLBACK WinMain(HINSTANCE hInstance,
     programArenas = (win32_arenas*)memory.permanentStorage;
 
     size_t initArenaAllocSize = Megabytes(700);
-    size_t perFrameArenaAllocSize = Megabytes(50);
+    size_t perFrameArenaAllocSize = Megabytes(100);
 
     memory.permanentArenaBase = (u8*)memory.permanentStorage + sizeof(win32_arenas);
     memory.transientArenaBase = (u8*)memory.transientStorage + sizeof(win32_arenas);
@@ -530,10 +552,16 @@ int CALLBACK WinMain(HINSTANCE hInstance,
 
     HR(CreateDXGIFactory1(__uuidof(IDXGIFactory6), (void**)&factory));
 
-    factory->EnumAdapters(1, &adapter);
+    //adapter 1 is cpu, adapter 0 is gpu
+    
+    factory->EnumAdapters(0, &adapter);
 
+    DXGI_ADAPTER_DESC adDesc = {};
+    adapter->GetDesc(&adDesc);
+    
     IDXGIOutput* adapterOutput = {};
     adapter->EnumOutputs(1, &adapterOutput);
+
 
     HRESULT hr = {};
     
@@ -560,7 +588,7 @@ int CALLBACK WinMain(HINSTANCE hInstance,
     win32_spawnable_objs win32Buffers = {};
     win32Code.Win32CreateSpawnableBuffers(&sailInitData.gameObjs,
 					  &win32Buffers,
-					  platformInfo.frameworkArenas.spawnedObjectArena,
+					  platformInfo.frameworkArenas.setupArena,
 					  &programArenas->perFrameArena,
 					  &memoryPoolCode,
 					  d3dDevice);    
@@ -688,6 +716,13 @@ int CALLBACK WinMain(HINSTANCE hInstance,
 	    
 	    hr = d3dDevice->CreateBuffer(&cbDesc, NULL, &sailConstantBuffers.dynamicVBuffer);
 
+	    D3D11_BUFFER_DESC pCbDesc = {};
+	    pCbDesc.Usage = D3D11_USAGE_DYNAMIC;
+	    pCbDesc.ByteWidth = sizeof(material_constants);
+	    pCbDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+	    pCbDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+
+	    hr = d3dDevice->CreateBuffer(&pCbDesc, NULL, &sailConstantBuffers.dynamicPBuffer);
 
 	    RAWINPUTDEVICE rid[1];
 	    rid[0].usUsagePage = 0x01;
@@ -848,5 +883,8 @@ int CALLBACK WinMain(HINSTANCE hInstance,
     {
 	i32 foo = 0;
     }
+
+
+    
     return(0);
 }
