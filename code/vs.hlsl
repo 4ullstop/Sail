@@ -2,13 +2,14 @@ struct VS_INPUT
 {
 	float3 vPos : POSITION;
 	float3 vColor : COLOR0;
+	float2 texCoord : TEXCOORD;
 };
 
 struct VS_OUTPUT
 {
 	float4 position : SV_POSITION;
 	float4 color : COLOR0;
-	
+	float2 texCoord : TEXCOORD;
 };
 
 cbuffer ModelViewProjectionConstantBuffer : register(b0)
@@ -36,6 +37,7 @@ VS_OUTPUT main(VS_INPUT input)
 
 	output.position = pos;
 	output.color = float4(input.vColor, 1.0f);
+	output.texCoord = input.texCoord;
 
 	return(output);
 }

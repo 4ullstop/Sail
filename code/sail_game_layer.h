@@ -129,6 +129,7 @@ struct sail_initialize_data
 {
     game_loaded_objs gameObjs;
 
+    game_loaded_textures gameTextures;
     boat_entity boat;
 };
 
@@ -163,6 +164,7 @@ GetForwardVector(r32 pitch, r32 yaw)
     result = NormalizeV3(result);
     return(result);
 }
+
 
 #define SAIL_UPDATE(name) void GAME_CALL name(game_framework_dll_code* gameFrameworkCode, memory_pool_dll_code* memoryPoolCode, game_input* input, game_camera* camera, r32 deltaTime, sail_initialize_data* initData)
 typedef SAIL_UPDATE(sail_update);

@@ -26,6 +26,8 @@ global_variable ID3D11DepthStencilView* depthStencilView;
 global_variable ID3D11Texture2D* depthStencil;
 global_variable D3D11_TEXTURE2D_DESC bbDesc;
 
+global_variable ID3D11SamplerState* textureSamplerState;
+
 global_variable r32 screenWidth = 1280;
 global_variable r32 screenHeight = 720;
 
@@ -179,6 +181,11 @@ CreateShaders(shaders* gameShaders)
 	    "COLOR", 0, DXGI_FORMAT_R32G32B32_FLOAT,
 	    0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0
 	},
+
+	{
+	    "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,
+	    0, 24, D3D11_INPUT_PER_VERTEX_DATA, 0
+	},
     };
 
     hr = d3dDevice->CreateInputLayout(
@@ -249,6 +256,7 @@ Render(game_loaded_objs* gameObjs, win32_spawnable_objs* win32Objs, sail_constan
     context->PSSetShader(shader->pixelShader,
 			 nullptr,
 			 0);
+
     
     //Just rendering the small things we want to render
     listed_memory_node* objNode = (listed_memory_node*)gameObjs->spawnedObjNodes;
@@ -288,10 +296,19 @@ Render(game_loaded_objs* gameObjs, win32_spawnable_objs* win32Objs, sail_constan
 	DirectX::XMStoreFloat4x4(&data->modelMat, dxMat);
 	context->Unmap(cBuffers->dynamicVBuffer, 0);
 
+	//determine if there is a texture then load it if there is
+	DirectX::XMVECTOR storedMatData = {};	
+	if (objInfo->textureInfo > 0)
+	{
+	    context->PSSetShaderResources(2, 1, &win32Objs->textureBuffers[objInfo->textureInfo - 1].textureResourceView);
+	    context->PSSetSamplers(0, 1, &textureSamplerState);
+	    storedMatData = DirectX::XMVectorSetY(storedMatData, (r32)1.0f);
+	}
+	
 	context->PSSetConstantBuffers(0, 1, &cBuffers->dynamicPBuffer);
 	hr = context->Map(cBuffers->dynamicPBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
 	material_constants* matData = (material_constants*)mapped.pData;
-	DirectX::XMVECTOR storedMatData = {};
+
 	storedMatData = DirectX::XMVectorSetX(storedMatData, (r32)drawBuffers->hasMaterials);
 	DirectX::XMStoreFloat4(&matData->hasMaterials, storedMatData);
 	context->Unmap(cBuffers->dynamicPBuffer, 0);
@@ -301,6 +318,8 @@ Render(game_loaded_objs* gameObjs, win32_spawnable_objs* win32Objs, sail_constan
 	    context->PSSetShaderResources(0, 1, &drawBuffers->materialResourceView);
 	    context->PSSetShaderResources(1, 1, &drawBuffers->materialPropertiesView);
 	}
+
+	
 	
 	context->DrawIndexed(
 	    drawBuffers->indexCount,
@@ -420,6 +439,7 @@ int CALLBACK WinMain(HINSTANCE hInstance,
 	gameFrameworkCode.GameUpdateCamera = (game_update_camera*)GetProcAddress(gameFrameworkLibrary, "GameUpdateCamera");
 	gameFrameworkCode.GameLoadOBJFiles = (game_load_obj_files*)GetProcAddress(gameFrameworkLibrary, "LoadGameOBJFiles");
 	gameFrameworkCode.GameSpawnNewOBJ = (game_spawn_new_obj*)GetProcAddress(gameFrameworkLibrary, "SpawnNewOBJ");
+	gameFrameworkCode.GameLoadTextures = (game_load_textures*)GetProcAddress(gameFrameworkLibrary, "LoadGameTextures");
     }
 
     HMODULE memoryPoolLibrary = LoadLibrary("D:/ExternalCustomAPIs/MemoryPools/dll/memory_pools.dll");
@@ -587,6 +607,7 @@ int CALLBACK WinMain(HINSTANCE hInstance,
 
     win32_spawnable_objs win32Buffers = {};
     win32Code.Win32CreateSpawnableBuffers(&sailInitData.gameObjs,
+					  &sailInitData.gameTextures,
 					  &win32Buffers,
 					  platformInfo.frameworkArenas.setupArena,
 					  &programArenas->perFrameArena,
@@ -724,6 +745,20 @@ int CALLBACK WinMain(HINSTANCE hInstance,
 
 	    hr = d3dDevice->CreateBuffer(&pCbDesc, NULL, &sailConstantBuffers.dynamicPBuffer);
 
+	    //Creating the sampler states for textures
+
+	    D3D11_SAMPLER_DESC samplerDesc = {};
+	    samplerDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+	    samplerDesc.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
+	    samplerDesc.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
+	    samplerDesc.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
+
+	    samplerDesc.ComparisonFunc = D3D11_COMPARISON_NEVER;
+	    samplerDesc.MinLOD = 0;
+	    samplerDesc.MaxLOD = D3D11_FLOAT32_MAX;
+
+	    hr = d3dDevice->CreateSamplerState(&samplerDesc, &textureSamplerState);
+	    
 	    RAWINPUTDEVICE rid[1];
 	    rid[0].usUsagePage = 0x01;
 	    rid[0].usUsage = 0x02;

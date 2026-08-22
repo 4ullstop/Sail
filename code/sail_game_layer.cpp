@@ -247,13 +247,23 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
     char* windSockPath = "../data/obj/wind_sock.obj";
     char* axesPath = "../data/obj/axes.obj";
     char* arrowPath = "../data/obj/forward_arrow.obj";
-    char* paths[256] = {boatPath, mastPath, refCubePath, windSockPath, axesPath, arrowPath};
+    char* texTestPath = "../data/obj/texture_testing.obj";
+    char* paths[256] = {boatPath, mastPath, refCubePath, windSockPath, axesPath, arrowPath, texTestPath};
 
     
     initData->gameObjs = gameFrameworkCode->GameLoadOBJFiles(platformInfo->parseObjCode,
 							     &platformInfo->frameworkArenas,
-							     pgMem, memoryPoolCode, paths, 6);
+							     pgMem, memoryPoolCode, paths, 7);
 
+
+    char* testPath = "../data/textures/cat_tester.bmp";
+    char* texPaths[256] = {testPath};
+    initData->gameTextures = gameFrameworkCode->GameLoadTextures(texPaths,
+								 platformInfo->frameworkArenas.setupArena,
+								 1,
+								 DEBUGPlatformReadEntireFile,
+								 memoryPoolCode);
+    
 #if 0    
     char* filename = "../data/obj/axes.mtl";
     ParseMTLData(filename,
@@ -274,6 +284,18 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
     v4 axesRot = {1.0f, 0.0f, 0.0f, 0.0f};
 
 
+    transform texTestTransform = {};
+    texTestTransform.location = {4.0f, 0.0f, 0.0f};
+    texTestTransform.rotation = QuaternionIdentity();
+    texTestTransform.scale = oneScale;
+    spawned_obj_info* testTextureOBJ = gameFrameworkCode->GameSpawnNewOBJ(spawnable_obj_type::sot_texTest,
+							     texTestTransform,
+							     &initData->gameObjs,
+							     memoryPoolCode,
+							     false,
+							     Identity());
+    testTextureOBJ->textureInfo = tl_testing;
+    
     transform axesTransform = {};
     axesTransform.location = {0.0f, 0.0f, 0.0f, 0.0f};
     axesTransform.rotation = QuaternionIdentity();
@@ -523,7 +545,7 @@ extern "C" SAIL_UPDATE(SailUpdate)
     //Update our camera
 
     game_controller_input* controller = GetController(input, 0);    
-#if 0
+#if 1
 
     r32 velocity = camera->movementSpeed * deltaTime;
     if (controller)
