@@ -3,6 +3,111 @@
 
 #include "D:/ExternalCustomAPIs/OBJLoader/code/mtl_parser.cpp"
 
+//Introducing waves
+
+/*
+  Boat information:
+  Overall length: 8.74m;
+  Beam: 3.12m;
+ */
+
+
+
+//waves v2
+
+
+//A lot of this information pertaining to the boat dimensions, wave angles etc... may need to be stored
+//at some point in the future
+//x: x, y: z, z: t
+
+internal v2
+RotateV2(v2 v, r32 angleR)
+{
+    r32 cosA = cosf(angleR);
+    r32 sinA = cosf(angleR);
+    v2 result = {};
+    result.x = v.x * cosA - v.y * sinA;
+    result.y = v.x * sinA + v.y * cosA;
+    return(result);
+}
+
+internal r32 
+WaveHeight(v2 points, r32 time)
+{
+    r32 y = 0.0f;
+    r32 amplitude = 0.2f;
+    
+    r32 waveLength = 10.0f;
+    r32 kMag = (2.0f * FM_PI) / waveLength;
+    v2 waveDir = {0.7071f, 0.7071f};
+    
+    v2 k = {waveDir.x * kMag, waveDir.y * kMag}; //If you wanted to get uber technical, you can calculate this value
+    //by choosing a wave length in meters and then the angle it is travelling to the x axis
+    r32 kMagnitude = sqrtf((k.x * k.x) + (k.y * k.y));
+//our angular frequency w 
+    r32 w = (r32)sqrtf(kMagnitude * 9.81f);
+
+    r32 phase = (k.x * points.x) + (k.y * points.y) - (w * time);
+    y = amplitude * sinf(phase);
+    return(y);
+}
+
+struct wave_computation
+{
+    v4 n;
+    r32 yPos;
+};
+
+internal wave_computation
+ComputeWave(boat_entity* boat, r32 boatYaw)
+{
+    //Get sample points of the boat
+    wave_computation result = {};
+    r32 boatL = 8.74f;
+    r32 boatW = 3.12f;
+
+    r32 time = boat->waveInfo.t;
+    
+    v2 bowL = {0.0f, boatL / 2.0f};
+    v2 sternL = {0.0f, -(boatL / 2.0f)};
+    v2 portL = {-(boatW / 2.0f), 0.0f};
+    v2 starboardL = {boatW / 2.0f, 0.0f};
+    
+    bowL = RotateV2(bowL, boatYaw);
+    sternL = RotateV2(sternL, boatYaw);
+    portL = RotateV2(portL, boatYaw);
+    starboardL = RotateV2(starboardL, boatYaw);
+    
+    v2 worldPos = {boat->objInfo->modelTransform.location.x, boat->objInfo->modelTransform.location.z};
+
+    v2 bowW = worldPos + bowL;
+    v2 sternW = worldPos + sternL;
+    v2 portW = worldPos + portL;
+    v2 starboardW = worldPos + starboardL;
+
+    r32 yBow = WaveHeight(bowW, time);
+    r32 yStern = WaveHeight(sternW, time);
+    r32 yPort = WaveHeight(portW, time);
+    r32 yStarboard = WaveHeight(starboardW, time);
+
+
+
+    r32 yBmyS = yBow - yStern;
+    r32 ySmyP = yStarboard - yPort;
+    
+    r32 boatY = (yBow + yStern + yPort + yStarboard) / 4.0f;
+    result.yPos = boatY;
+    r32 pitch = yBmyS / boatL;
+    r32 roll = ySmyP / boatW;
+
+    v4 longitudinal = {0.0f, yBmyS, boatL, 0.0f};
+    v4 transverse = {boatW, ySmyP, 0.0f, 0.0f};
+
+    v4 n = NormalizeV4(CrossV3(transverse, longitudinal));
+    result.n = n;
+    return(result);
+}
+
 //Sailing mechanic
 
 internal v4
@@ -208,7 +313,7 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
     cameraResult.yaw = -0.0f;
     cameraResult.pitch = 0.0f;
     cameraResult.front = {0.0f, 0.0f, -1.0f, 0.0f};
-    cameraResult.position = {-4.2f, 0.04f, 0.77f, 0.0f};
+    cameraResult.position = {-8.2f, 0.04f, 0.77f, 0.0f};
 //    cameraResult.position = {10.0f, 10.f, 10.0f, 10.f};
 
     cameraResult.movementSpeed = 5.0f;
@@ -241,26 +346,30 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
 
 
     char* icoPath = "../data/obj/debug_ico.obj";
-    char* boatPath = "../data/obj/boat_V2.obj";
-    char* mastPath = "../data/obj/boat_V1_mast.obj";
+    char* boatPath = "../data/obj/boat_V3.obj";
+    char* mastPath = "../data/obj/boat_V2_mast.obj";
     char* refCubePath = "../data/obj/move_ref.obj";
     char* windSockPath = "../data/obj/wind_sock.obj";
     char* axesPath = "../data/obj/axes.obj";
     char* arrowPath = "../data/obj/forward_arrow.obj";
     char* texTestPath = "../data/obj/texture_testing.obj";
-    char* paths[256] = {boatPath, mastPath, refCubePath, windSockPath, axesPath, arrowPath, texTestPath};
+    char* oceanPath = "../data/obj/ocean_V1.obj";
+    char* windDirModelBottom = "../data/obj/boat_wind_dir_bottom.obj";
+    char* windDirModelTop = "../data/obj/boat_wind_dir_top.obj";
+    char* paths[256] = {boatPath, mastPath, refCubePath, windSockPath, axesPath, arrowPath, texTestPath, oceanPath, windDirModelBottom, windDirModelTop};
 
     
     initData->gameObjs = gameFrameworkCode->GameLoadOBJFiles(platformInfo->parseObjCode,
 							     &platformInfo->frameworkArenas,
-							     pgMem, memoryPoolCode, paths, 7);
+							     pgMem, memoryPoolCode, paths, 10);
 
-
+    initData->isFreeCam = false;
     char* testPath = "../data/textures/cat_tester.bmp";
-    char* texPaths[256] = {testPath};
+    char* windModelTexture = "../data/textures/boat_wind_dir_uvs.bmp";
+    char* texPaths[256] = {testPath, windModelTexture};
     initData->gameTextures = gameFrameworkCode->GameLoadTextures(texPaths,
 								 platformInfo->frameworkArenas.setupArena,
-								 1,
+								 2,
 								 DEBUGPlatformReadEntireFile,
 								 memoryPoolCode);
     
@@ -283,7 +392,18 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
 
     v4 axesRot = {1.0f, 0.0f, 0.0f, 0.0f};
 
+    transform oceanTransform = {};
+    oceanTransform.location = {0.0f, -1.0f, 0.0f, 0.f};
+    oceanTransform.rotation = QuaternionIdentity();
+    oceanTransform.scale = oneScale;
 
+    gameFrameworkCode->GameSpawnNewOBJ(sot_ocean,
+				       oceanTransform,
+				       &initData->gameObjs,
+				       memoryPoolCode,
+				       false,
+				       Identity());
+    
     transform texTestTransform = {};
     texTestTransform.location = {4.0f, 0.0f, 0.0f};
     texTestTransform.rotation = QuaternionIdentity();
@@ -337,7 +457,6 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
     boatTransform.rotation = QuaternionIdentity();
     boatTransform.scale = {1.0f, 1.0f, 1.0f, 1.0f};
     
-
     initData->boat = {};
 
     initData->boat.objInfo = 
@@ -348,8 +467,38 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
 					   false,
 					   Identity());
 
+    //WAVES
+
     //MAIN SAIL
-    v4 mastLocation = {0.65f, -0.7f, 0.0f, 1.0f};
+
+    transform windModelBottomTransform = {};
+    windModelBottomTransform.location = {-0.4f, 0.3f, 1.8f, 0.0f};
+    windModelBottomTransform.rotation = QuaternionIdentity();
+    windModelBottomTransform.scale = oneScale;
+    initData->boat.windModelBottom = 
+	gameFrameworkCode->GameSpawnNewOBJ(sot_wind_model_bottom,
+					   windModelBottomTransform,
+					   &initData->gameObjs,
+					   memoryPoolCode,
+					   true,
+					   initData->boat.objInfo->modelMatrix);
+    initData->boat.windModelBottom->textureInfo = tl_wind_model;
+    
+    transform windModelTopTransform = {};
+    windModelTopTransform.location = {0.0f, 0.0f, 0.0f, 0.0f};
+    windModelTopTransform.rotation = QuaternionIdentity();
+    windModelTopTransform.scale = oneScale;
+    initData->boat.windModelTop =
+	gameFrameworkCode->GameSpawnNewOBJ(sot_wind_model_top,
+					   windModelTopTransform,
+					   &initData->gameObjs,
+					   memoryPoolCode,
+					   true,
+					   initData->boat.windModelBottom->modelMatrix);
+
+    initData->boat.windModelTop->textureInfo = tl_wind_model;
+//    v4 mastLocation = {0.65f, -0.7f, 0.0f, 1.0f};
+    v4 mastLocation = {0.0f, 0.0f, -1.0f, 1.0f};
     initData->boat.sailInfo = {};    
     initData->boat.sailInfo.mainSail.locationOffset = mastLocation;
     initData->boat.sailInfo.mainSail.startRot = 
@@ -386,7 +535,7 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
 #if 0    
     v4 camOffset = {-4.2f, 0.04f, 0.77f, 0.0f};
 #else
-    v4 camOffset = {0.77f, 0.04f, 4.2f, 0.0f};    
+    v4 camOffset = {0.0f, 1.0f, 3.0f, 0.0f};    
 #endif    
     
     initData->boat.lerpTimeSpeed = 1.f;
@@ -456,6 +605,31 @@ ChangeCamOffset(static_cam_location newCamLocation, boat_entity* boat)
 }
 
 
+internal v4
+RotateOBJ(spawned_obj_info* obj, r32 roll, r32 pitch, r32 yaw, v4 qCurrRot, r32 deltaTime)
+{
+    v3 result = {};
+    v4 targetQuat = QuaternionFromEuler((r32)DEG2RAD(pitch), (r32)DEG2RAD(yaw), (r32)DEG2RAD(roll));
+    targetQuat = QuaternionNormalize(targetQuat);
+
+    r32 slerpFactor = 5.0f * deltaTime;
+    if (slerpFactor > 1.0f) slerpFactor = 1.0f;    
+    v4 t4 = {slerpFactor, slerpFactor, slerpFactor, slerpFactor};
+
+    
+    v4 outRotation = QuaternionSlerpV(qCurrRot, targetQuat, t4);
+    obj->modelTransform.rotation = outRotation;
+    obj->modelMatrix = CreateModelMatrix(obj->modelTransform.scale,
+					 obj->modelTransform.rotation,
+					 obj->modelTransform.location);
+    return(outRotation);
+}
+
+internal v4
+RotateOBJ(spawned_obj_info* obj, v3 targetRotations, v4 qCurrRot, r32 deltaTime)
+{
+    return(RotateOBJ(obj, targetRotations.roll, targetRotations.roll, targetRotations.pitch, qCurrRot, deltaTime));
+}
 
 internal v4 
 RotateOBJ(spawned_obj_info* objInfo, r32 deltaTime, v4 startRot, v4* targetRot, r32 lerpSpeed, v4 axis, r32 degrees, m4 parentTransform)
@@ -464,7 +638,6 @@ RotateOBJ(spawned_obj_info* objInfo, r32 deltaTime, v4 startRot, v4* targetRot, 
     *targetRot = QuaternionMultiply(*targetRot,
 				    QuaternionRotationAxis(axis, (r32)DEG2RAD(degrees)));
 
-    
     r32 t = 1 - lerpSpeed * deltaTime;
     v4 t4 = {t, t, t, t};
     v4 outRotation = QuaternionSlerpV(startRot, *targetRot, t4);
@@ -486,7 +659,6 @@ RotateOBJ(spawned_obj_info* objInfo, r32 deltaTime, v4 startRot, v4* targetRot, 
 						     objInfo->modelTransform.location);
 	}
     }
-    
     
     return(outRotation);
 }
@@ -531,6 +703,82 @@ RotateOBJ(spawned_obj_info* objInfo, r32 deltaTime, v4 startRot, v4* targetRot, 
     return(RotateOBJ(objInfo, deltaTime, startRot, targetRot, lerpSpeed, axis, degrees, Identity()));
 }
 
+internal v4
+RotateOBJLocal(spawned_obj_info* objInfo, r32 deltaTime, v4 startRot, v4* targetRot, r32 lerpSpeed, v4 axis, r32 degrees)
+{
+    *targetRot = QuaternionNormalize(*targetRot);
+    *targetRot = QuaternionMultiply(*targetRot,
+				    QuaternionRotationAxis(axis, (r32)DEG2RAD(degrees)));
+    
+    r32 t = 1 - lerpSpeed * deltaTime;
+    v4 t4 = {t, t, t, t};
+    v4 outRotation = QuaternionSlerpV(startRot, *targetRot, t4);
+
+    if (objInfo)
+    {
+	objInfo->localTransform.rotation = outRotation;
+	objInfo->localMatrix = CreateModelMatrix(objInfo->localTransform.scale,
+						 objInfo->localTransform.rotation,
+						 objInfo->localTransform.location);
+    }
+    return(outRotation);
+}
+
+
+internal void
+ApplyBoatWaveRotations(boat_entity* boat, r32 deltaTime)
+{
+
+    r32 currentYawAngle = (r32)DEG2RAD(boat->targetBoatRotations.yaw);
+    
+    v4 qYaw =
+    {
+	0.0f,
+	sinf(currentYawAngle * 0.5f),
+	0.0f,
+	cosf(currentYawAngle * 0.5f)
+    };
+    
+    r32 timeStep = 0.3f;
+    boat->waveInfo.t += timeStep * deltaTime;
+    wave_computation wave = ComputeWave(boat, currentYawAngle);
+    v4 qWave = wave.n;
+    v4 localUp = {0.0f, 1.0f, 0.0f, 0.0f};
+    v4 v = CrossV3(localUp, qWave);
+
+
+    
+    v4 aLenSq = VecLenSq(localUp);
+    v4 bLenSq = VecLenSq(qWave);
+
+    v3 aLenSq3 = {aLenSq.x, aLenSq.y, aLenSq.z};
+    v3 bLenSq3 = {bLenSq.x, bLenSq.y, bLenSq.z};
+    v3 a = {localUp.x, localUp.y, localUp.z};
+    v3 b = {qWave.x, qWave.y, qWave.z};
+    
+    r32 w = (r32)(sqrtf(Dot(aLenSq3, bLenSq3))) + (Dot(a, b));
+    v4 quat = {v.x, v.y, v.z, w};
+    v4 qTilt = QuaternionNormalize(quat);
+    v4 targetRot = QuaternionMultiply(qTilt, qYaw);
+    
+    v4 addedPos = {0.0f, wave.yPos, 0.0f, 0.0f};
+
+    r32 baseWaterLevel = 0.0f;
+    boat->objInfo->modelTransform.location.y = baseWaterLevel + wave.yPos;
+
+    
+
+
+    v4 t4 = {timeStep, timeStep, timeStep, timeStep};
+    v4 outRotation = QuaternionSlerpV(boat->currRot, targetRot, t4);
+    boat->currRot = outRotation;
+    boat->objInfo->modelTransform.rotation = outRotation;
+    boat->objInfo->modelMatrix = CreateModelMatrix(boat->objInfo->modelTransform.scale,
+						   boat->objInfo->modelTransform.rotation,
+						   boat->objInfo->modelTransform.location);
+
+
+}
 
 internal void
 UpdateMastModelMatrix(sail_type* main, boat_entity* boat)
@@ -539,205 +787,247 @@ UpdateMastModelMatrix(sail_type* main, boat_entity* boat)
     boat->windSock.model->modelMatrix = boat->windSock.model->localMatrix * boat->objInfo->modelMatrix;
 }
 
+internal void
+UpdateChildModelMatrix(spawned_obj_info* child, spawned_obj_info* parent)
+{
+    child->modelMatrix = child->localMatrix * parent->modelMatrix;
+}
+
+
+
+
 extern "C" SAIL_UPDATE(SailUpdate)
 {
     //Update our input
     //Update our camera
 
     game_controller_input* controller = GetController(input, 0);    
-#if 1
 
-    r32 velocity = camera->movementSpeed * deltaTime;
-    if (controller)
-    {
-	if (controller->moveForward.endedDown)
-	{
-	    //w
-	    camera->position = camera->position + (camera->front * velocity);
-	}
-
-	if (controller->moveLeft.endedDown)
-	{
-	    //a
-	    camera->position = camera->position - (camera->right * velocity);
-	}
-
-	if (controller->moveBackward.endedDown)
-	{
-	    //s
-	    camera->position = camera->position - (camera->front * velocity);	    
-	}
-
-	if (controller->moveRight.endedDown)
-	{
-	    //d
-	    camera->position = camera->position + (camera->right * velocity);
-	}
-    }
-#else
     boat_entity* boat = &initData->boat; 
 
     if (controller)
     {
-	//eventually, it would be nice if the movement was also dependent
-	//on the velocity of the boat, meaning we turn more or less depending on how fast the boat
-	//is moving or if the boat is moving at all
-	//Q
-
-	sail_type* main = &boat->sailInfo.mainSail;
-
-	r32 velocity = boat->movementSpeed * deltaTime;
-
-	wind_sock* windSock = &boat->windSock;
-	
-	boat->objInfo->modelTransform.location = boat->objInfo->modelTransform.location + (boat->forward * velocity);
-	boat->objInfo->modelMatrix = CreateModelMatrix(boat->objInfo->modelTransform.scale,
-						       boat->objInfo->modelTransform.rotation,
-						       boat->objInfo->modelTransform.location);
-
-	CalculateCameraLocation(camera, boat);
-	UpdateMastModelMatrix(main, boat);
-
-
-
-		  
-	if (controller->moveDown.started)
+	if (controller->one.started)
 	{
-	    ChangeCamOffset(static_cam_location::scl_left, boat);
-	    CalculateCameraLocation(camera, boat);
-	    controller->moveDown.started = false;
+	    initData->isFreeCam = !initData->isFreeCam;
+	    controller->one.started = false;
 	}
-
-	//E
-	if (controller->moveUp.started)
+	if (initData->isFreeCam)
 	{
-	    ChangeCamOffset(static_cam_location::scl_right, boat);
-	    CalculateCameraLocation(camera, boat);
-	    controller->moveUp.started = false;
-	}
-
-	if ((boat->staticCamLocation == scl_right) || (boat->staticCamLocation == scl_left))
-	{
-	    boat->boatCameraMode = bcm_winch;
-	}
-	else
-	{
-	    boat->boatCameraMode = bcm_steer;
-	}
-	v4 zAxis = {0.0f, 1.0f, 0.0f, 0.0f};		
-
-
-
-	
-	if (boat->boatCameraMode == bcm_steer)
-	{
-	    i32 boatTurnDeg = 1; // * deltaTime ??
-
+	    r32 camVelocity = camera->movementSpeed * deltaTime;
+	    if (controller->moveForward.endedDown)
+	    {
+		//w
+		camera->position = camera->position + (camera->front * camVelocity);
+	    }
 
 	    if (controller->moveLeft.endedDown)
 	    {
-		boat->currRot = RotateOBJ(boat->objInfo,
-					  deltaTime,
-					  boat->startRot,
-					  &boat->qTargetRot,
-					  boat->lerpTimeSpeed,
-					  zAxis,
-					  (r32)boatTurnDeg);
+		//a
+		camera->position = camera->position - (camera->right * camVelocity);
+	    }
 
-		CalculateCameraLocation(camera, boat);
-		UpdateMastModelMatrix(main, boat);		
+	    if (controller->moveBackward.endedDown)
+	    {
+		//s
+		camera->position = camera->position - (camera->front * camVelocity);	    
 	    }
 
 	    if (controller->moveRight.endedDown)
 	    {
-
-		boat->currRot = RotateOBJ(boat->objInfo,
-					  deltaTime,
-					  boat->startRot,
-					  &boat->qTargetRot,
-					  boat->lerpTimeSpeed,
-					  zAxis,
-					  (r32)-boatTurnDeg);		
-
-		CalculateCameraLocation(camera, boat);
-		UpdateMastModelMatrix(main, boat);		
+		//d
+		camera->position = camera->position + (camera->right * camVelocity);
 	    }
-	}
-	else if (boat->boatCameraMode == bcm_winch)
-	{
-	    //change the orientation of the sails
 
-	    /*
-	      then flesh out some of the kinks with the rotation and wind direction stuff
-	      then make a input buffer to make it so you have to 'wind' the sails in each direction
-	      using 'asdwa' or 'dsawd' depending on which way you want to rotate the sail
-	     */
-	    r32 sailDeg = 1;
-	    if (boat->staticCamLocation == static_cam_location::scl_left)
+
+
+	}
+	else
+	{
+
+	    //eventually, it would be nice if the movement was also dependent
+	    //on the velocity of the boat, meaning we turn more or less depending on how fast the boat
+	    //is moving or if the boat is moving at all
+	    //Q
+
+	    sail_type* main = &boat->sailInfo.mainSail;
+
+	    r32 velocity = boat->movementSpeed * deltaTime;
+
+	    wind_sock* windSock = &boat->windSock;
+
+	
+	    boat->objInfo->modelTransform.location = boat->objInfo->modelTransform.location + (boat->forward * velocity);
+	    boat->objInfo->modelMatrix = CreateModelMatrix(boat->objInfo->modelTransform.scale,
+							   boat->objInfo->modelTransform.rotation,
+							   boat->objInfo->modelTransform.location);
+
+
+	    CalculateCameraLocation(camera, boat);
+	    UpdateMastModelMatrix(main, boat);
+
+
+	    
+	    if (controller->moveDown.started)
 	    {
+		ChangeCamOffset(static_cam_location::scl_left, boat);
+		CalculateCameraLocation(camera, boat);
+		controller->moveDown.started = false;
+	    }
+
+	    //E
+	    if (controller->moveUp.started)
+	    {
+		ChangeCamOffset(static_cam_location::scl_right, boat);
+		CalculateCameraLocation(camera, boat);
+		controller->moveUp.started = false;
+	    }
+
+	    if ((boat->staticCamLocation == scl_right) || (boat->staticCamLocation == scl_left))
+	    {
+		boat->boatCameraMode = bcm_winch;
+	    }
+	    else
+	    {
+		boat->boatCameraMode = bcm_steer;
+	    }
+	    v4 zAxis = {0.0f, 1.0f, 0.0f, 0.0f};		
+
+
+
+
+	    r32 turnSpeed = 100.0f;
+	    if (boat->boatCameraMode == bcm_steer)
+	    {
+		i32 boatTurnDeg = 1; // * deltaTime ??
+
+
 		if (controller->moveLeft.endedDown)
 		{
+#if 0
+		    boat->currRot = RotateOBJ(boat->objInfo,
+					      deltaTime,
+					      boat->startRot,
+					      &boat->qTargetRot,
+					      boat->lerpTimeSpeed,
+					      zAxis,
+					      (r32)-boatTurnDeg);
+#else
+		    boat->targetBoatRotations.yaw += turnSpeed * deltaTime;
+		    boat->currRot = RotateOBJ(boat->objInfo,
+					      boat->targetBoatRotations,
+					      boat->currRot,
+					      deltaTime);
+#endif		    
 
-		    main->qSailRot = RotateOBJ(boat->mast,
-					       deltaTime,
-					       main->startRot,
-					       &main->qTargetRot,
-					       boat->lerpTimeSpeed,
-					       zAxis,
-					       (r32)-sailDeg,
-					       boat->objInfo->modelMatrix);
-						
+		    CalculateCameraLocation(camera, boat);
+		    UpdateMastModelMatrix(main, boat);		
 		}
-	    }
-	    else if (boat->staticCamLocation == static_cam_location::scl_right)
-	    {
+
 		if (controller->moveRight.endedDown)
 		{
-
-		    main->qSailRot = RotateOBJ(boat->mast,
-					       deltaTime,
-					       main->startRot,
-					       &main->qTargetRot,
-					       boat->lerpTimeSpeed,
-					       zAxis,
-					       (r32)sailDeg,
-					       boat->objInfo->modelMatrix);		
+#if 0
+		    boat->currRot = RotateOBJ(boat->objInfo,
+					      deltaTime,
+					      boat->startRot,
+					      &boat->qTargetRot,
+					      boat->lerpTimeSpeed,
+					      zAxis,
+					      (r32)boatTurnDeg);
+#else
+		    boat->targetBoatRotations.yaw -= turnSpeed * deltaTime;
+		    boat->currRot = RotateOBJ(boat->objInfo,
+					      boat->targetBoatRotations,
+					      boat->currRot,
+					      deltaTime);		    
+#endif
+		    CalculateCameraLocation(camera, boat);
+		    UpdateMastModelMatrix(main, boat);		
 		}
 	    }
+	    else if (boat->boatCameraMode == bcm_winch)
+	    {
+		//change the orientation of the sails
+
+		/*
+		  then flesh out some of the kinks with the rotation and wind direction stuff
+		  then make a input buffer to make it so you have to 'wind' the sails in each direction
+		  using 'asdwa' or 'dsawd' depending on which way you want to rotate the sail
+		*/
+		r32 sailDeg = 1;
+		if (boat->staticCamLocation == static_cam_location::scl_left)
+		{
+		    if (controller->moveLeft.endedDown)
+		    {
+
+			main->qSailRot = RotateOBJ(boat->mast,
+						   deltaTime,
+						   main->startRot,
+						   &main->qTargetRot,
+						   boat->lerpTimeSpeed,
+						   zAxis,
+						   (r32)-sailDeg,
+						   boat->objInfo->modelMatrix);
+						
+		    }
+		}
+		else if (boat->staticCamLocation == static_cam_location::scl_right)
+		{
+		    if (controller->moveRight.endedDown)
+		    {
+
+			main->qSailRot = RotateOBJ(boat->mast,
+						   deltaTime,
+						   main->startRot,
+						   &main->qTargetRot,
+						   boat->lerpTimeSpeed,
+						   zAxis,
+						   (r32)sailDeg,
+						   boat->objInfo->modelMatrix);		
+		    }
+		}
 	    
 
 
+	    }
+
+
+
+	    ProcessSailInputs(controller, boat);
+	    UpdateBoatVectors(boat);
+
+	    ApplyBoatWaveRotations(boat, deltaTime);	
+	    CalculateCameraLocation(camera, boat);
+	    UpdateMastModelMatrix(main, boat);			    
+	    //Updating the wind sock so I can tell what direction the wind is going
+
+	    v4 clearWind = NormalizeV4(boat->sailInfo.windDirection);
+
+	    v4 windRotation = CreateQuaternionRotationFromVector(clearWind);
+	    windRotation = QuaternionNormalize(windRotation);
+	    v4 offset = {0.7f, -0.4f, 5.2f, 0.0f};
+	    m4 windMat = MatrixRotationQuaternion(windRotation);
+	
+
+	    v4 normalBoatRot = QuaternionNormalize(boat->objInfo->modelTransform.rotation);
+	    m4 boatRotation = MatrixRotationQuaternion(normalBoatRot);
+
+	    v4 rotatedOffset = Vector3Transform(offset, boatRotation);
+
+	    v4 boatPos = boat->objInfo->modelTransform.location;
+	
+	    windMat.e[3][0] = boatPos.x + rotatedOffset.x;
+	    windMat.e[3][1] = boatPos.y + rotatedOffset.y;
+	    windMat.e[3][2] = boatPos.z + rotatedOffset.z;
+	    windMat.e[3][3] = 1.0f;
+
+	    windSock->model->modelMatrix = windMat;
+
+	    UpdateChildModelMatrix(boat->windModelBottom, boat->objInfo);
+	    UpdateChildModelMatrix(boat->windModelTop, boat->windModelBottom);
 	}
-	ProcessSailInputs(controller, boat);
-	UpdateBoatVectors(boat);
-
-
-	//Updating the wind sock so I can tell what direction the wind is going
-
-	v4 clearWind = NormalizeV4(boat->sailInfo.windDirection);
-
-	v4 windRotation = CreateQuaternionRotationFromVector(clearWind);
-	windRotation = QuaternionNormalize(windRotation);
-	v4 offset = {0.7f, -0.4f, 5.2f, 0.0f};
-	m4 windMat = MatrixRotationQuaternion(windRotation);
-	
-
-	v4 normalBoatRot = QuaternionNormalize(boat->objInfo->modelTransform.rotation);
-	m4 boatRotation = MatrixRotationQuaternion(normalBoatRot);
-
-	v4 rotatedOffset = Vector3Transform(offset, boatRotation);
-
-	v4 boatPos = boat->objInfo->modelTransform.location;
-	
-	windMat.e[3][0] = boatPos.x + rotatedOffset.x;
-	windMat.e[3][1] = boatPos.y + rotatedOffset.y;
-	windMat.e[3][2] = boatPos.z + rotatedOffset.z;
-	windMat.e[3][3] = 1.0f;
-
-	windSock->model->modelMatrix = windMat;
     }
-#endif
-    gameFrameworkCode->GameUpdateCamera(camera);
 
+    gameFrameworkCode->GameUpdateCamera(camera);
 
 }

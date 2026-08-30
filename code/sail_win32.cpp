@@ -821,7 +821,7 @@ int CALLBACK WinMain(HINSTANCE hInstance,
 			  
 		OutputDebugString(sailBuffer);
 #else
-#if 1
+#if 0
 		char speed[256];
 		sprintf_s(speed, sizeof(speed), "Speed: %f\n",
 			  boat->movementSpeed);
@@ -842,6 +842,19 @@ int CALLBACK WinMain(HINSTANCE hInstance,
 #endif		
 #endif
 
+
+		
+		char normalBoat[256];
+		sprintf_s(normalBoat, sizeof(normalBoat), "Boat Rotation: %f, %f\n",
+			  boat->waveInfo.currentPoint.x,
+			  boat->waveInfo.currentPoint.y);
+
+
+
+
+			  
+		OutputDebugString(normalBoat);
+		
 
 		
 		game_camera_data gCamData = {};

@@ -79,6 +79,31 @@ struct wind_sock
     v4 targetRot;
 };
 
+struct sine_wave_properties
+{
+    r32 amplitude;
+    r32 period;
+    r32 horizontalShift;
+    r32 verticalShift;
+
+    r32 sineCrest;
+    r32 sineTrough;
+};
+
+struct wave
+{
+    r32 t;
+    r32 waveSpeed;
+    v2 currentPoint;
+    v2 tangentPoint;
+    v2 normalPoint;
+    sine_wave_properties waveProperties;
+
+    v4 maxRotD;
+    v4 minRotD;
+    v4 qWaveTilt;
+};
+
 struct boat_entity
 {
 
@@ -88,10 +113,12 @@ struct boat_entity
     v4 currRot;
     v4 startRot;
 
+
     //Vectors
     v4 forward;
     v4 up;
-
+    v4 right;
+    
     wind_sock windSock;
 
     r32 windAngle;
@@ -101,12 +128,17 @@ struct boat_entity
     
     r32 pitch;
     r32 yaw;
+    r32 roll;
+
+    v3 targetBoatRotations;
     
     r32 currRotTime;
     r32 lerpTimeSpeed;
 
     spawned_obj_info* objInfo;
     spawned_obj_info* mast;
+    spawned_obj_info* windModelBottom;
+    spawned_obj_info* windModelTop;
 
     i32 flag;
 
@@ -123,6 +155,8 @@ struct boat_entity
     r32 movementSpeed;
 
     sailing sailInfo;
+
+    wave waveInfo;
 };
 
 struct sail_initialize_data
@@ -131,6 +165,7 @@ struct sail_initialize_data
 
     game_loaded_textures gameTextures;
     boat_entity boat;
+    bool32 isFreeCam;
 };
 
 struct platform_info
