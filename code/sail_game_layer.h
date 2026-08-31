@@ -131,6 +131,9 @@ struct boat_entity
     r32 roll;
 
     v3 targetBoatRotations;
+    v3 angularVelocity;
+
+    r32 currTargetYaw;
     
     r32 currRotTime;
     r32 lerpTimeSpeed;

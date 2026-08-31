@@ -604,7 +604,6 @@ ChangeCamOffset(static_cam_location newCamLocation, boat_entity* boat)
     };
 }
 
-
 internal v4
 RotateOBJ(spawned_obj_info* obj, r32 roll, r32 pitch, r32 yaw, v4 qCurrRot, r32 deltaTime)
 {
@@ -612,8 +611,10 @@ RotateOBJ(spawned_obj_info* obj, r32 roll, r32 pitch, r32 yaw, v4 qCurrRot, r32 
     v4 targetQuat = QuaternionFromEuler((r32)DEG2RAD(pitch), (r32)DEG2RAD(yaw), (r32)DEG2RAD(roll));
     targetQuat = QuaternionNormalize(targetQuat);
 
-    r32 slerpFactor = 5.0f * deltaTime;
-    if (slerpFactor > 1.0f) slerpFactor = 1.0f;    
+    r32 rate = 1.0f;
+    r32 slerpFactor = 1.0f - (r32)expf(-deltaTime * rate);
+    if (slerpFactor > 1.0f) slerpFactor = 1.0f;
+
     v4 t4 = {slerpFactor, slerpFactor, slerpFactor, slerpFactor};
 
     
@@ -895,8 +896,11 @@ extern "C" SAIL_UPDATE(SailUpdate)
 
 
 
+	    
+	    r32 turnSpeed = 4.0f;
+	    r32 turnSlerp = 10.0f;
+	    r32 currYaw = boat->targetBoatRotations.yaw;
 
-	    r32 turnSpeed = 100.0f;
 	    if (boat->boatCameraMode == bcm_steer)
 	    {
 		i32 boatTurnDeg = 1; // * deltaTime ??
@@ -904,45 +908,45 @@ extern "C" SAIL_UPDATE(SailUpdate)
 
 		if (controller->moveLeft.endedDown)
 		{
-#if 0
-		    boat->currRot = RotateOBJ(boat->objInfo,
-					      deltaTime,
-					      boat->startRot,
-					      &boat->qTargetRot,
-					      boat->lerpTimeSpeed,
-					      zAxis,
-					      (r32)-boatTurnDeg);
-#else
-		    boat->targetBoatRotations.yaw += turnSpeed * deltaTime;
+
+		    boat->currTargetYaw = boat->targetBoatRotations.y + turnSpeed;
+
+
+
+//		    boat->targetBoatRotations.yaw += turnSpeed * deltaTime;
+
+		    
+#if 0		    
 		    boat->currRot = RotateOBJ(boat->objInfo,
 					      boat->targetBoatRotations,
 					      boat->currRot,
 					      deltaTime);
-#endif		    
+
+
 
 		    CalculateCameraLocation(camera, boat);
-		    UpdateMastModelMatrix(main, boat);		
+		    UpdateMastModelMatrix(main, boat);
+#endif				    
 		}
 
+		
 		if (controller->moveRight.endedDown)
 		{
-#if 0
-		    boat->currRot = RotateOBJ(boat->objInfo,
-					      deltaTime,
-					      boat->startRot,
-					      &boat->qTargetRot,
-					      boat->lerpTimeSpeed,
-					      zAxis,
-					      (r32)boatTurnDeg);
-#else
-		    boat->targetBoatRotations.yaw -= turnSpeed * deltaTime;
+
+
+		    boat->currTargetYaw = boat->targetBoatRotations.y - turnSpeed;
+
+
+//		    boat->targetBoatRotations.yaw -= turnSpeed * deltaTime;
+#if 0		    
 		    boat->currRot = RotateOBJ(boat->objInfo,
 					      boat->targetBoatRotations,
 					      boat->currRot,
 					      deltaTime);		    
-#endif
+
 		    CalculateCameraLocation(camera, boat);
-		    UpdateMastModelMatrix(main, boat);		
+		    UpdateMastModelMatrix(main, boat);
+#endif		    
 		}
 	    }
 	    else if (boat->boatCameraMode == bcm_winch)
@@ -992,11 +996,24 @@ extern "C" SAIL_UPDATE(SailUpdate)
 	    }
 
 
+	    
+	    
 
+
+	    boat->targetBoatRotations.yaw = Lerp(currYaw, boat->currTargetYaw, 1.0f - expf(-deltaTime * turnSlerp));
+
+	    boat->currRot = RotateOBJ(boat->objInfo,
+				      boat->targetBoatRotations,
+				      boat->currRot,
+				      deltaTime);
+
+
+	    
+	    ApplyBoatWaveRotations(boat, deltaTime);	
 	    ProcessSailInputs(controller, boat);
 	    UpdateBoatVectors(boat);
 
-	    ApplyBoatWaveRotations(boat, deltaTime);	
+
 	    CalculateCameraLocation(camera, boat);
 	    UpdateMastModelMatrix(main, boat);			    
 	    //Updating the wind sock so I can tell what direction the wind is going

@@ -845,9 +845,11 @@ int CALLBACK WinMain(HINSTANCE hInstance,
 
 		
 		char normalBoat[256];
-		sprintf_s(normalBoat, sizeof(normalBoat), "Boat Rotation: %f, %f\n",
-			  boat->waveInfo.currentPoint.x,
-			  boat->waveInfo.currentPoint.y);
+		sprintf_s(normalBoat, sizeof(normalBoat), "Angular Vel: %f, %f, %f\n",
+			  boat->angularVelocity.x,
+			  boat->angularVelocity.y,
+			  boat->angularVelocity.z);
+
 
 
 
