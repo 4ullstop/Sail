@@ -47,6 +47,11 @@ struct sail_type
     
     r32 pitch;
     r32 yaw;
+    r32 roll;
+
+    r32 targetYaw;
+
+    v3 targetSailRotations;
     
     angle_comparison sailToBoat;
 };
@@ -142,6 +147,7 @@ struct boat_entity
     spawned_obj_info* mast;
     spawned_obj_info* windModelBottom;
     spawned_obj_info* windModelTop;
+    spawned_obj_info* windCardinal;
 
     i32 flag;
 
@@ -160,6 +166,8 @@ struct boat_entity
     sailing sailInfo;
 
     wave waveInfo;
+
+    r32 output;
 };
 
 struct sail_initialize_data

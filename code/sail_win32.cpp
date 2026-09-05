@@ -14,7 +14,7 @@
 
 #include <d3d11_2.h>
 #include <dxgi1_6.h>
-
+#include <xinput.h>
 
 
 global_variable ID3D11Device* d3dDevice;
@@ -45,7 +45,6 @@ global_variable thread_context blankThread;
 
 global_variable program_state programState;
 global_variable i64 perfCountFrequency;
-
 
 
 inline LARGE_INTEGER
@@ -406,7 +405,7 @@ int CALLBACK WinMain(HINSTANCE hInstance,
 
     DirectX::XMVECTOR dxQE = DirectX::XMQuaternionRotationRollPitchYawFromVector(xmV);
     v4 vQE = QuaternionFromEuler(v);
-#endif
+
 
     DirectX::XMVECTOR forward = {1.0f, 0.0f, 0.0f, 0.0f};
     DirectX::XMVECTOR up = {0.0f, 1.0f, 0.0f, 0.0f};
@@ -418,7 +417,11 @@ int CALLBACK WinMain(HINSTANCE hInstance,
     v4 vForward = {1.0f, 0.0f, 0.0f, 0.0f};
     
     v4 test = CreateQuaternionRotationFromVector(vForward);
-    
+#endif
+
+    v4 eQTest = QuaternionFromEuler((r32)DEG2RAD(24.0f), 0.0f, 0.0f);
+
+    DirectX::XMVECTOR eQTestDx = DirectX::XMQuaternionRotationRollPitchYaw((r32)DEG2RAD(24.0f), 0.0f, 0.0f);
     
     UINT desiredSchedulerMs = 1;
     bool32 sleepIsGranular = (timeBeginPeriod(desiredSchedulerMs) == TIMERR_NOERROR);
@@ -507,6 +510,10 @@ int CALLBACK WinMain(HINSTANCE hInstance,
 	    (win32_convert_game_camera_to_win32*)GetProcAddress(win32FrameworkLibrary, "ConvertGameCameraDataToWin32");
 	win32Code.Win32FromM4ToXMMATRIX =
 	    (win32_from_m4_to_xmmatrix*)GetProcAddress(win32FrameworkLibrary, "FromM4ToXMMATRIX");
+	win32Code.Win32ProcessControllerInputs =
+	    (win32_process_controller_inputs*)GetProcAddress(win32FrameworkLibrary, "Win32ProcessControllerInputs");
+	win32Code.Win32LoadXInput =
+	    (win32_load_xinput*)GetProcAddress(win32FrameworkLibrary, "Win32LoadXInput");
     }
 
     HMODULE parseOBJLibrary = LoadLibrary("D:/ExternalCustomAPIs/OBJLoader/dll/obj_loader.dll");
@@ -637,7 +644,7 @@ int CALLBACK WinMain(HINSTANCE hInstance,
 	{
 	    //Get our refresh rate
 	    i32 monitorRefreshRate = 60;
-
+	    win32Code.Win32LoadXInput();
 
 #if 0	    
 	    HDC refreshDC = GetDC(window);
@@ -798,7 +805,8 @@ int CALLBACK WinMain(HINSTANCE hInstance,
 						      &programState);
 
 
-
+		win32Code.Win32ProcessControllerInputs(newInput, oldInput);
+		
 		gameCamera.xChange = deltaTime * (0.3f * mouse.loc.x);
 		gameCamera.yChange = deltaTime * (0.3f * mouse.loc.y);
 
@@ -845,10 +853,8 @@ int CALLBACK WinMain(HINSTANCE hInstance,
 
 		
 		char normalBoat[256];
-		sprintf_s(normalBoat, sizeof(normalBoat), "Angular Vel: %f, %f, %f\n",
-			  boat->angularVelocity.x,
-			  boat->angularVelocity.y,
-			  boat->angularVelocity.z);
+		sprintf_s(normalBoat, sizeof(normalBoat), "Testing: %f\n",
+			  boat->output);
 
 
 
