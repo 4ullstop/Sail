@@ -109,6 +109,15 @@ struct wave
     v4 qWaveTilt;
 };
 
+struct winch
+{
+    spawned_obj_info* winchModel;
+    
+    v4 targetRot;
+    v4 currRot;
+    v4 startRot;
+};
+
 struct boat_entity
 {
 
@@ -149,6 +158,10 @@ struct boat_entity
     spawned_obj_info* windModelTop;
     spawned_obj_info* windCardinal;
 
+
+    winch winchL;
+    winch winchR;
+    
     i32 flag;
 
     bool32 isRotating;
@@ -167,7 +180,18 @@ struct boat_entity
 
     wave waveInfo;
 
-    r32 output;
+    i32 output;
+    r32 rOutput;
+};
+
+
+struct joystick_rotation
+{
+    v2 stickAverage;
+
+    r32 angle;
+    bool32 clockwise; //true==clockwise false==counterclockwise
+    i32 quad;
 };
 
 struct sail_initialize_data
@@ -177,6 +201,9 @@ struct sail_initialize_data
     game_loaded_textures gameTextures;
     boat_entity boat;
     bool32 isFreeCam;
+
+    joystick_rotation newJoystick;
+    joystick_rotation oldJoystick;
 };
 
 struct platform_info

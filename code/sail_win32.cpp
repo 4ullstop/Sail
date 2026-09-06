@@ -853,8 +853,9 @@ int CALLBACK WinMain(HINSTANCE hInstance,
 
 		
 		char normalBoat[256];
-		sprintf_s(normalBoat, sizeof(normalBoat), "Testing: %f\n",
-			  boat->output);
+		sprintf_s(normalBoat, sizeof(normalBoat), "Quad, Angle: %i, %f\n",
+			  boat->output,
+			  boat->rOutput);
 
 
 

@@ -358,12 +358,13 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
     char* windDirModelTop = "../data/obj/boat_wind_dir_top.obj";
     char* windDirCardinal = "../data/obj/boat_wind_dir_cardinal.obj";
     char* marooned = "../data/obj/marooned_V1.obj";
-    char* paths[512] = {boatPath, mastPath, refCubePath, windSockPath, axesPath, arrowPath, texTestPath, oceanPath, windDirModelBottom, windDirModelTop, marooned, windDirCardinal};
+    char* winch = "../data/obj/winch.obj";
+    char* paths[512] = {boatPath, mastPath, refCubePath, windSockPath, axesPath, arrowPath, texTestPath, oceanPath, windDirModelBottom, windDirModelTop, marooned, windDirCardinal, winch};
 
     
     initData->gameObjs = gameFrameworkCode->GameLoadOBJFiles(platformInfo->parseObjCode,
 							     &platformInfo->frameworkArenas,
-							     pgMem, memoryPoolCode, paths, 12);
+							     pgMem, memoryPoolCode, paths, 13);
 
     initData->isFreeCam = false;
     char* testPath = "../data/textures/cat_tester.bmp";
@@ -393,7 +394,7 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
 #else
 
     v4 axesRot = {1.0f, 0.0f, 0.0f, 0.0f};
-
+    
     transform maroonedTransform = {};
     maroonedTransform.location = {0.0f, 0.0f, -50.0f};
     maroonedTransform.rotation = QuaternionIdentity();
@@ -497,7 +498,7 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
 					   true,
 					   initData->boat.objInfo->modelMatrix);
     initData->boat.windModelBottom->textureInfo = tl_wind_model;
-    
+
     transform windModelTopTransform = {};
     windModelTopTransform.location = {0.0f, 0.0f, 0.0f, 0.0f};
     windModelTopTransform.rotation = QuaternionIdentity();
@@ -548,7 +549,7 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
     initData->boat.windSock = {};
     
     transform windSockTransform = {};
-    windSockTransform.location = {0.0f, 0.0f, 5.0f, 0.0f};
+    windSockTransform.location = {0.0f, 0.0f, 3.0f, 0.0f};
     windSockTransform.rotation = QuaternionIdentity();
     windSockTransform.scale = oneScale;
 
@@ -559,8 +560,33 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
 					   memoryPoolCode,
 					   true,
 					   initData->boat.objInfo->modelMatrix);
-    
-    //BOAT
+
+    transform winchLTransform = {};
+    winchLTransform.location = {-1.0f, 0.4f, 2.3f};
+    winchLTransform.rotation = QuaternionIdentity();
+    winchLTransform.scale = oneScale;
+    initData->boat.winchL.winchModel = 
+	gameFrameworkCode->GameSpawnNewOBJ(sot_winch,
+					   winchLTransform,
+					   &initData->gameObjs,
+					   memoryPoolCode,
+					   true,
+					   initData->boat.objInfo->modelMatrix);
+    initData->boat.winchL.targetRot = boatTransform.rotation;    
+
+    transform winchRTransform = {};
+    winchRTransform.location = {1.0f, 0.4f, 2.3f};
+    winchRTransform.rotation = QuaternionIdentity();
+    winchRTransform.scale = oneScale;
+    initData->boat.winchR.winchModel = 
+	gameFrameworkCode->GameSpawnNewOBJ(sot_winch,
+					   winchRTransform,
+					   &initData->gameObjs,
+					   memoryPoolCode,
+					   true,
+					   initData->boat.objInfo->modelMatrix);
+    initData->boat.winchR.targetRot = boatTransform.rotation;
+//BOAT
 #if 0    
     v4 camOffset = {-4.2f, 0.04f, 0.77f, 0.0f};
 #else
@@ -868,8 +894,124 @@ UpdateChildModelMatrix(spawned_obj_info* child, spawned_obj_info* parent)
     child->modelMatrix = child->localMatrix * parent->modelMatrix;
 }
 
+internal i32
+GetAngleQuad(r32 angle)
+{
+    if ((angle >= 0.0f) && (angle <= 89.9f))
+    {
+	return 0;
+    }
+    if ((angle >= 90.0f) && (angle <= 179.9f))
+    {
+	return 1;
+    }
+    if ((angle >= 180.0f) && (angle <= 269.9f))
+    {
+	return 2;
+    }
+    if ((angle >= 270.0f) && (angle <= 359.9f))
+    {
+	return 3;
+    }
+    return(404);
+}
+
+#define ROTATION_CLOCKWISE 0
+#define ROTATION_COUNTERCLOCKWISE 1
+#define NO_ROTATION 2
+
+internal joystick_rotation
+UpdateJoystickInformation(joystick_rotation* oldRotation, r32 x, r32 y)
+{
+    joystick_rotation result = {};
+
+    r32 angle = (r32)RAD2DEG(atan2f(y, x));
+    if (angle < 0)
+	angle += 360.0f;
+    
+    
+    result.angle = angle;
 
 
+    result.quad = GetAngleQuad(angle);
+
+    i32 quadDifference = oldRotation->quad - result.quad;
+    if ((quadDifference < -1) || (quadDifference > 1))
+    {
+	result.clockwise = NO_ROTATION;
+	return(result);
+    }
+
+    r32 diff = oldRotation->angle - angle;
+    result.clockwise = diff > 0;
+
+    if ((angle == 90.0f) || (angle == 180.0f) || (angle == 270.0f) || (angle == 0.0f))
+    {
+	result.clockwise = oldRotation->clockwise;
+	return(result);
+    }
+    
+    if ((oldRotation->quad == 0) && (result.quad == 3))
+    {
+	result.clockwise = true;
+	return(result);
+    }
+
+    if ((oldRotation->quad == 3) && (result.quad == 0))
+    {
+	result.clockwise = false;
+	return(result);
+    }
+    
+    return(result);
+}
+
+void internal
+InterpretControllerInformation(game_controller_input* pad, bool32 rotateClockwise, boat_entity* boat, joystick_rotation* newJoystick, joystick_rotation* oldJoystick, r32 deltaTime, winch* rotatingWinch)
+{
+    sail_type* main = &boat->sailInfo.mainSail;
+    r32 sailDeg = rotateClockwise ? -0.2f : 0.2f;
+    r32 winchDeg = rotateClockwise ? -0.5f : 0.5f;
+    v4 yAxis = {0.0f, 1.0f, 0.0f, 0.0f};
+    if ((pad->moveRight.endedDown) || (pad->moveLeft.endedDown) ||
+	(pad->moveUp.endedDown) || (pad->moveDown.endedDown))
+    {
+	*newJoystick = UpdateJoystickInformation(oldJoystick,
+					     pad->leftStickAverageX,
+					     pad->leftStickAverageY);
+//	boat->output = initData->newJoystick.clockwise;
+//	boat->rOutput = initData->newJoystick.angle;
+
+
+	if (newJoystick->clockwise == rotateClockwise)
+	{
+	    main->qSailRot = RotateOBJ(boat->mast,
+				       deltaTime,
+				       main->startRot,
+				       &main->qTargetRot,
+				       boat->lerpTimeSpeed,
+				       yAxis,
+				       sailDeg,
+				       boat->objInfo->modelMatrix);
+
+	    rotatingWinch->currRot = RotateOBJ(rotatingWinch->winchModel,
+				       deltaTime,
+				       rotatingWinch->startRot,
+				       &rotatingWinch->targetRot,
+				       boat->lerpTimeSpeed,
+				       yAxis,
+				       winchDeg,
+				       boat->objInfo->modelMatrix);
+	}
+
+			
+
+    }
+    else
+    {
+	newJoystick->clockwise = NO_ROTATION;
+    }    
+}
 
 extern "C" SAIL_UPDATE(SailUpdate)
 {
@@ -1009,11 +1151,19 @@ extern "C" SAIL_UPDATE(SailUpdate)
 		  then make a input buffer to make it so you have to 'wind' the sails in each direction
 		  using 'asdwa' or 'dsawd' depending on which way you want to rotate the sail
 		*/
-		boat->output = padController->leftStickAverageX + padController->leftStickAverageY;
-		
+
 		r32 sailDeg = 0.5f;
 		if (boat->staticCamLocation == static_cam_location::scl_left)
 		{
+
+		    InterpretControllerInformation(padController,
+						   ROTATION_COUNTERCLOCKWISE,
+						   boat,
+						   &initData->newJoystick,
+						   &initData->oldJoystick,
+						   deltaTime,
+						   &boat->winchL);
+
 		    if (controller->moveLeft.endedDown)
 		    {
 			main->targetYaw = main->targetSailRotations.y + sailTurnSpeed;
@@ -1033,6 +1183,14 @@ extern "C" SAIL_UPDATE(SailUpdate)
 		}
 		else if (boat->staticCamLocation == static_cam_location::scl_right)
 		{
+		    InterpretControllerInformation(padController,
+						   ROTATION_CLOCKWISE,
+						   boat,
+						   &initData->newJoystick,
+						   &initData->oldJoystick,
+						   deltaTime,
+						   &boat->winchR);
+
 		    if (controller->moveRight.endedDown)
 		    {
 			main->targetYaw = main->targetSailRotations.y - sailTurnSpeed;
@@ -1122,9 +1280,14 @@ extern "C" SAIL_UPDATE(SailUpdate)
 									 boat->windModelBottom);
 	    
 	    UpdateChildModelMatrix(boat->windCardinal, boat->objInfo);
+
+	    UpdateChildModelMatrix(boat->winchR.winchModel, boat->objInfo);
+	    UpdateChildModelMatrix(boat->winchL.winchModel, boat->objInfo);
+
 	}
     }
 
     gameFrameworkCode->GameUpdateCamera(camera);
-
+    initData->oldJoystick = initData->newJoystick;
+    initData->newJoystick = {};
 }
