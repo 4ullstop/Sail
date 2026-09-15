@@ -28,6 +28,7 @@ MapValue(v2 oRange, v2 nRange, r32 value)
 }
     
 #define PADSENS 2.0f
+#define SAILMOVEMENTSENS 0.02f
 
 internal v2
 RotateV2(v2 v, r32 angleR)
@@ -270,7 +271,8 @@ UpdateBoatVectors(boat_entity* boat)
 	targetRange = -MapValue(boatStarboardRange, sailRange, boat->windAngle);
     }
 
-    s = CalculateSmoothDropOff(boat->sailAngle, targetRange, 3);
+    //higher number == move forgivness in sail rotation
+    s = CalculateSmoothDropOff(boat->sailAngle, targetRange, 12);
 
 
 
@@ -979,28 +981,6 @@ UpdateChildModelMatrix(spawned_obj_info* child, spawned_obj_info* parent)
     child->modelMatrix = child->localMatrix * parent->modelMatrix;
 }
 
-internal i32
-GetAngleQuad(r32 angle)
-{
-    if ((angle >= 0.0f) && (angle <= 89.9f))
-    {
-	return 0;
-    }
-    if ((angle >= 90.0f) && (angle <= 179.9f))
-    {
-	return 1;
-    }
-    if ((angle >= 180.0f) && (angle <= 269.9f))
-    {
-	return 2;
-    }
-    if ((angle >= 270.0f) && (angle <= 359.9f))
-    {
-	return 3;
-    }
-    return(404);
-}
-
 #define ROTATION_CLOCKWISE 0
 #define ROTATION_COUNTERCLOCKWISE 1
 #define NO_ROTATION 2
@@ -1011,51 +991,43 @@ UpdateJoystickInformation(joystick_rotation* oldRotation, r32 x, r32 y)
     joystick_rotation result = {};
 
     r32 angle = (r32)RAD2DEG(atan2f(y, x));
-    if (angle < 0)
+    if (angle < 0.0f)
 	angle += 360.0f;
     
     
     result.angle = angle;
 
 
-    result.quad = GetAngleQuad(angle);
+    result.quad = (i32)(angle / 90.0f);
+    
 
-    i32 quadDifference = oldRotation->quad - result.quad;
-    if ((quadDifference < -1) || (quadDifference > 1))
+    r32 diff = result.angle - oldRotation->angle;
+
+    if (diff > 180.0f) diff -= 360.0f;
+    if (diff < -180.0f) diff += 360.0f;
+
+    r32 epsilon = 0.001f;
+    if (diff < -epsilon)
     {
-	result.clockwise = NO_ROTATION;
-	return(result);
+	result.clockwise = ROTATION_CLOCKWISE;
     }
-
-    r32 diff = oldRotation->angle - angle;
-    result.clockwise = diff > 0;
-
-    if ((angle == 90.0f) || (angle == 180.0f) || (angle == 270.0f) || (angle == 0.0f))
+    else if (diff > epsilon)
+    {
+	result.clockwise = ROTATION_COUNTERCLOCKWISE;
+    }
+    else
     {
 	result.clockwise = oldRotation->clockwise;
-	return(result);
     }
-    
-    if ((oldRotation->quad == 0) && (result.quad == 3))
-    {
-	result.clockwise = true;
-	return(result);
-    }
-
-    if ((oldRotation->quad == 3) && (result.quad == 0))
-    {
-	result.clockwise = false;
-	return(result);
-    }
-    
     return(result);
 }
 
-void internal
-InterpretControllerInformation(game_controller_input* pad, bool32 rotateClockwise, boat_entity* boat, joystick_rotation* newJoystick, joystick_rotation* oldJoystick, r32 deltaTime, winch* rotatingWinch)
+r32 internal
+InterpretControllerInformation(game_controller_input* pad, bool32 rotateClockwise, boat_entity* boat, joystick_rotation* newJoystick, joystick_rotation* oldJoystick, r32 deltaTime, winch* rotatingWinch, r32 inputYaw)
 {
+    r32 newYaw = inputYaw;
     sail_type* main = &boat->sailInfo.mainSail;
-    r32 sailDeg = rotateClockwise ? -0.2f : 0.2f;
+    r32 sailDeg = rotateClockwise ? -SAILMOVEMENTSENS : SAILMOVEMENTSENS;
     r32 winchDeg = rotateClockwise ? -0.5f : 0.5f;
     v4 yAxis = {0.0f, 1.0f, 0.0f, 0.0f};
     if ((pad->moveRight.endedDown) || (pad->moveLeft.endedDown) ||
@@ -1067,14 +1039,7 @@ InterpretControllerInformation(game_controller_input* pad, bool32 rotateClockwis
 
 	if (newJoystick->clockwise == rotateClockwise)
 	{
-	    main->qSailRot = RotateOBJ(boat->mast,
-				       deltaTime,
-				       main->startRot,
-				       &main->qTargetRot,
-				       boat->lerpTimeSpeed,
-				       yAxis,
-				       sailDeg,
-				       boat->objInfo->modelMatrix);
+	    newYaw = inputYaw + sailDeg;
 
 	    rotatingWinch->currRot = RotateOBJ(rotatingWinch->winchModel,
 				       deltaTime,
@@ -1084,6 +1049,7 @@ InterpretControllerInformation(game_controller_input* pad, bool32 rotateClockwis
 				       yAxis,
 				       winchDeg,
 				       boat->objInfo->modelMatrix);
+
 	}
 
 			
@@ -1092,7 +1058,14 @@ InterpretControllerInformation(game_controller_input* pad, bool32 rotateClockwis
     else
     {
 	newJoystick->clockwise = NO_ROTATION;
-    }    
+	newJoystick->angle = (r32)RAD2DEG(atan2f(pad->leftStickAverageY, pad->leftStickAverageX));
+	if (newJoystick->angle < 0.0f) newJoystick->angle += 360.0f;
+	newJoystick->quad = (i32)(newJoystick->angle / 90.0f);
+
+    }
+    *oldJoystick = *newJoystick;
+    
+    return(newYaw);
 }
 
 internal void
@@ -1261,13 +1234,14 @@ extern "C" SAIL_UPDATE(SailUpdate)
 		if (boat->staticCamLocation == static_cam_location::scl_left)
 		{
 
-		    InterpretControllerInformation(padController,
-						   ROTATION_COUNTERCLOCKWISE,
-						   boat,
-						   &initData->newJoystick,
-						   &initData->oldJoystick,
-						   deltaTime,
-						   &boat->winchL);
+		    main->targetYaw = InterpretControllerInformation(padController,
+								     ROTATION_COUNTERCLOCKWISE,
+								     boat,
+								     &initData->newJoystick,
+								     &initData->oldJoystick,
+								     deltaTime,
+								     &boat->winchL,
+								     main->targetSailRotations.y);
 
 		    if (controller->moveLeft.endedDown)
 		    {
@@ -1300,13 +1274,14 @@ extern "C" SAIL_UPDATE(SailUpdate)
 		}
 		else if (boat->staticCamLocation == static_cam_location::scl_right)
 		{
-		    InterpretControllerInformation(padController,
-						   ROTATION_CLOCKWISE,
-						   boat,
-						   &initData->newJoystick,
-						   &initData->oldJoystick,
-						   deltaTime,
-						   &boat->winchR);
+		    main->targetYaw = InterpretControllerInformation(padController,
+								     ROTATION_CLOCKWISE,
+								     boat,
+								     &initData->newJoystick,
+								     &initData->oldJoystick,
+								     deltaTime,
+								     &boat->winchR,
+								     main->targetSailRotations.y);
 
 		    if (controller->moveRight.endedDown)
 		    {
@@ -1344,6 +1319,7 @@ extern "C" SAIL_UPDATE(SailUpdate)
 
 
 	    main->targetSailRotations.yaw = Lerp(currSailYaw, main->targetYaw, 1.0f - expf(-deltaTime * turnSailSlerp));
+//	    main->targetSailRotations.yaw = main->targetYaw;
 
 #if 1
 	    v4 targetSailRot = QuaternionFromEuler(main->targetSailRotations.pitch,
@@ -1439,6 +1415,6 @@ extern "C" SAIL_UPDATE(SailUpdate)
     }
 
     gameFrameworkCode->GameUpdateCamera(camera);
-    initData->oldJoystick = initData->newJoystick;
-    initData->newJoystick = {};
+
+
 }

@@ -853,11 +853,10 @@ int CALLBACK WinMain(HINSTANCE hInstance,
 
 		
 		char normalBoat[256];
-		sprintf_s(normalBoat, sizeof(normalBoat), "Sail Rotation: %f, Boat Rotation To Wind: %f, Speed: %f\n",
-			  boat->sailAngle,
-			  boat->windAngle,
-			  boat->movementSpeed);
-			  
+		sprintf_s(normalBoat, sizeof(normalBoat), "Rotating Counter: %i\n",
+			  sailInitData.oldJoystick.clockwise);
+
+
 			  
 
 #if 0
