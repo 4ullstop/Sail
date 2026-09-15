@@ -44,12 +44,17 @@ struct sail_type
     v4 startRot;
 
     v4 locationOffset;
+
+    v4 rotOffset;
     
     r32 pitch;
     r32 yaw;
     r32 roll;
 
     r32 targetYaw;
+
+    r32 localYaw;
+    r32 localPitch;
 
     v3 targetSailRotations;
     
@@ -118,6 +123,16 @@ struct winch
     v4 startRot;
 };
 
+struct speedometer
+{
+    spawned_obj_info* movingMesh;
+
+    r32 localRollStart;
+    r32 currRoll;
+    r32 maxRoll;
+    r32 minRoll;
+};
+
 struct boat_entity
 {
 
@@ -159,6 +174,8 @@ struct boat_entity
     spawned_obj_info* windCardinal;
 
 
+    spawned_obj_info* speedometerBottom;
+    speedometer speedOmeter;
     winch winchL;
     winch winchR;
     

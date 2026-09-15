@@ -853,17 +853,27 @@ int CALLBACK WinMain(HINSTANCE hInstance,
 
 		
 		char normalBoat[256];
-		sprintf_s(normalBoat, sizeof(normalBoat), "Quad, Angle: %i, %f\n",
-			  boat->output,
-			  boat->rOutput);
-
-
-
-
-
+		sprintf_s(normalBoat, sizeof(normalBoat), "Sail Rotation: %f, Boat Rotation To Wind: %f, Speed: %f\n",
+			  boat->sailAngle,
+			  boat->windAngle,
+			  boat->movementSpeed);
 			  
-		OutputDebugString(normalBoat);
+			  
+
+#if 0
+		char boatRot[256];
+		sprintf_s(boatRot, sizeof(boatRot), "Boat Rotation: %f, %f, %f, %f\n",
+			  boat->objInfo->modelTransform.rotation.x,
+			  boat->objInfo->modelTransform.rotation.y,
+			  boat->objInfo->modelTransform.rotation.z,
+			  boat->objInfo->modelTransform.rotation.w);			  
+#endif
+				
 		
+		OutputDebugString(normalBoat);
+
+
+
 
 		
 		game_camera_data gCamData = {};

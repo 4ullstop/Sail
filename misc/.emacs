@@ -132,6 +132,8 @@
  (modify-face 'font-lock-note-face "Dark Green" nil nil t nil t nil nil)
 
 
+(global-unset-key (kbd "C-x C-o"))
+
 ;;TODO
 
 
