@@ -772,6 +772,9 @@ int CALLBACK WinMain(HINSTANCE hInstance,
 	    rid[0].dwFlags = RIDEV_NOLEGACY;
 	    rid[0].hwndTarget = window;
 
+	    game_state gameState = {};
+
+	    
 	    if (RegisterRawInputDevices(rid, 1, sizeof(rid[0])) == FALSE)
 	    {
 		OutputDebugString("Input device NOT registered\n");
@@ -814,67 +817,23 @@ int CALLBACK WinMain(HINSTANCE hInstance,
 		//The rest of the stuff (besides rendering) we see in win32_dx11.cpp should all be moved to our
 		//game code bc it's something we want to separate from the platform, and since
 		//I spent the time creating a separate math library, I would actually like to use it
-		SailUpdate(&gameFrameworkCode, &memoryPoolCode, newInput, &gameCamera, deltaTime, &sailInitData);
+		SailUpdate(&gameFrameworkCode, &memoryPoolCode, newInput, &gameCamera, deltaTime, &sailInitData, &gameState);
 
 
 		boat_entity* boat = &sailInitData.boat;
 		sail_type* main = &boat->sailInfo.mainSail;
 
-#if 0
-		char sailBuffer[256];
-		sprintf_s(sailBuffer, sizeof(sailBuffer), "Sail Forward: %f, %f, %f\n",
-			  main->sailForward.x,
-			  main->sailForward.y,
-			  main->sailForward.z);
-			  
-		OutputDebugString(sailBuffer);
-#else
-#if 0
-		char speed[256];
-		sprintf_s(speed, sizeof(speed), "Speed: %f\n",
-			  boat->movementSpeed);
-			  
-		OutputDebugString(speed);
-#endif
-#if 0
-		char sailBoatAngle[256];
-		sprintf_s(sailBoatAngle, sizeof(sailBoatAngle), "Sail angle: %f\n",
-			  boat->sailAngle);
-			  
-		OutputDebugString(sailBoatAngle);
-		char boatWindAngle[256];
-		sprintf_s(boatWindAngle, sizeof(boatWindAngle), "Boat To Wind Angle: %f\n",
-			  boat->windAngle);
-			  
-		OutputDebugString(boatWindAngle);
-#endif		
-#endif
-
-
 		
 		char normalBoat[256];
-		sprintf_s(normalBoat, sizeof(normalBoat), "Rotating Counter: %i\n",
-			  sailInitData.oldJoystick.clockwise);
+		sprintf_s(normalBoat, sizeof(normalBoat), "Time Spent In State: %f\n",
+			  gameState.tutorialData.timeSpentInState);
 
 
-			  
-
-#if 0
-		char boatRot[256];
-		sprintf_s(boatRot, sizeof(boatRot), "Boat Rotation: %f, %f, %f, %f\n",
-			  boat->objInfo->modelTransform.rotation.x,
-			  boat->objInfo->modelTransform.rotation.y,
-			  boat->objInfo->modelTransform.rotation.z,
-			  boat->objInfo->modelTransform.rotation.w);			  
-#endif
 				
 		
 		OutputDebugString(normalBoat);
 
 
-
-
-		
 		game_camera_data gCamData = {};
 		gCamData.world = gameCamera.world;
 		gCamData.view = gameCamera.view;
@@ -926,8 +885,8 @@ int CALLBACK WinMain(HINSTANCE hInstance,
 		//after spin
 		LARGE_INTEGER endCounter = Sail32GetWallClock();
 
-		r32 msPerFrame = (1000.0f * Sail32GetSecondsElapsed(lastCounter,
-								    Sail32GetWallClock()));
+		gameState.msPerFrame = (1000.0f * Sail32GetSecondsElapsed(lastCounter,
+									  Sail32GetWallClock()));
 
 		lastCounter = endCounter;
 		game_input* temp = newInput;
@@ -945,12 +904,5 @@ int CALLBACK WinMain(HINSTANCE hInstance,
 	}
     }
 	
-    if (!programState.running)
-    {
-	i32 foo = 0;
-    }
-
-
-    
     return(0);
 }

@@ -20,6 +20,30 @@
 //at some point in the future
 //x: x, y: z, z: t
 
+//supply in degrees
+internal void
+AddTargetWindRotation(r32 rotationAdditive, wind_rotation_update windRotation)
+{
+    v4 qAdditive = QuaternionFromEuler(0.0f, rotatoinAdditive, 0.0f);
+    
+}
+
+internal wind_rotation_update
+UpdateWindDirection(wind_rotation_update currentWindInfo, v4 currentWindDirection)
+{
+    wind_rotation_update result = {};
+    if ((currentWindInfo.targetWindDirection != currentWindDirection) && (!currentWindInfo.windInRotation))
+    {
+	result.targetWindDirection = currentWindInfo.targetWindDirection;
+	result.windInRotation = true;
+    }
+    else if (currentWindInfo.windInRotation)
+    {
+	//update current wind direction
+	result.newWindDirection = 
+    }
+}
+
 inline r32
 MapValue(v2 oRange, v2 nRange, r32 value)
 {
@@ -28,8 +52,7 @@ MapValue(v2 oRange, v2 nRange, r32 value)
 }
     
 #define PADSENS 2.0f
-#define SAILMOVEMENTSENS 0.02f
-
+#define SAILMOVEMENTSENS 0.003f
 internal v2
 RotateV2(v2 v, r32 angleR)
 {
@@ -127,23 +150,6 @@ r32 Clamp(r32 value, r32 min, r32 max)
     return (value);
 }
 
-#if 0
-internal v4
-GetForwardFromQuat(v4 inQuat, r32* pitch, r32* yaw)
-{
-    v4 quat = QuaternionNormalize(inQuat);
-//    quat = QuaternionConjugate(quat);
-
-    r32 forwardX = -2.0f * (quat.x * quat.z + quat.y * quat.w);
-    r32 forwardZ = -(1.0f - 2.0f * (quat.x * quat.x + quat.y * quat.y));
-
-    *yaw = atan2f(forwardX, forwardZ);
-    v4 result = GetForwardVector(*pitch, *yaw);
-
-//    result.x = -result.x;
-    return(result);
-}
-#else
 internal v4
 GetForwardFromQuat(v4 inQuat, r32* pitch, r32* yaw)
 {
@@ -164,35 +170,6 @@ GetForwardFromQuat(v4 inQuat, r32* pitch, r32* yaw)
 
     v4 result = GetForwardVector(*pitch, *yaw);
     return(result);
-}
-#endif
-
-
-internal bool32
-IsAngleRightSide(r32 angle)
-{
-    if (angle < 0.0f)
-    {
-	if ((angle >= -90.0f) && (angle < 0.0f))
-	{
-	    return(true);
-	}
-	else
-	{
-	    return(false);
-	}
-    }
-    else
-    {
-	if ((angle >= 0.0f) && (angle < 90.0f))
-	{
-	    return(true);
-	}
-	else
-	{
-	    return(false);
-	}
-    }    
 }
 
 internal r32
@@ -219,12 +196,8 @@ UpdateBoatVectors(boat_entity* boat)
     boat->forward = NegateVector(NormalizeV4(boat->forward));
     sail_type* main = &boat->sailInfo.mainSail;
 
-
-
     main->sailForward = GetForwardVector(main->targetSailRotations.pitch, main->targetSailRotations.yaw);
-
     main->sailForward = NormalizeV3(main->sailForward);
-
 
     //Now that we have the forwards of both of the objects we can compare against the boat and the wind direction
 
@@ -241,8 +214,6 @@ UpdateBoatVectors(boat_entity* boat)
     v2 v = {boat->sailInfo.windDirection.x, boat->sailInfo.windDirection.z};
     r32 angle = UnsignedAngleBetweenTwoVectorsDegrees(u, v);
     boat->windAngle = (angle);
-    
-
 
     r32 relAngle = main->targetSailRotations.yaw;
     while (relAngle > 180.0f) relAngle -= 360.0f;
@@ -251,39 +222,53 @@ UpdateBoatVectors(boat_entity* boat)
 
     boat->sailAngle = (r32)RAD2DEG(relAngle);
 
-
-    //Okay lets get crazy and use it twice
-
-
-
     v2 boatPortRange = {0.0f, -180.0f};
     v2 boatStarboardRange = {0.0f, 180.0f};
 
-
     v2 sailRange = {0.0f, 90.0f};
     r32 targetRange = 0.0f;
+
     if (boat->windAngle < 0.0f)
     {
-	targetRange = MapValue(boatPortRange, sailRange, boat->windAngle);	
+	targetRange = MapValue(boatPortRange, sailRange, boat->windAngle);
+
+	if (boat->windAngle > -45.0f)
+	{
+	    boat->movementDirection = bmd_waves;
+	}
+	else
+	{
+	    boat->movementDirection = bmd_forward;
+	}
     }
     else
     {
 	targetRange = -MapValue(boatStarboardRange, sailRange, boat->windAngle);
+	if (boat->windAngle < 45.0f)
+	{
+	    boat->movementDirection = bmd_waves;
+	}
+	else
+	{
+	    boat->movementDirection = bmd_forward;
+	}
     }
 
     //higher number == move forgivness in sail rotation
     s = CalculateSmoothDropOff(boat->sailAngle, targetRange, 12);
 
+    r32 p = 0.0f;
+    if (boat->movementDirection == bmd_waves)
+    {
+	s = CalculateSmoothDropOff(boat->windAngle, 0.0f, 12);
+	p = Lerp(0.0f, 0.2f, s);
+    }
+    else
+    {
+	p = Lerp(boat->bottomSpeed, boat->topSpeed, s);	
+    }
 
-
-
-    i32 sign = 1;
-    
-    boat->boatToSail = angle;
-
-    r32 p = Lerp(boat->bottomSpeed, boat->topSpeed, s);
-
-    boat->movementSpeed = p * sign;
+    boat->movementSpeed = p;
 }
 
 internal inherited_location_info
@@ -309,40 +294,6 @@ CalculateCameraLocation(game_camera* camera, boat_entity* boat)
     camera->targetForward = locInfo.targetForward;
     camera->inheritedRotation = locInfo.inheritedRotation;
     camera->position = locInfo.position;    
-}
-
-
-//Temporary for testing our sail orientation
-//Eventually this will only be according to the inputs of winding the winches
-internal void
-ProcessSailInputs(game_controller_input* controller, boat_entity* boat)
-{
-    sail_type* main = &boat->sailInfo.mainSail;
-    if (controller->one.started)
-    {
-	main->sailOrientation = so_closeHauled;
-	controller->one.started = false;	
-    }
-    if (controller->two.started)
-    {
-	main->sailOrientation = so_closeReach;	
-	controller->two.started = false;	
-    }
-    if (controller->three.started)
-    {
-	main->sailOrientation = so_beamReach;	
-	controller->three.started = false;	
-    }
-    if (controller->four.started)
-    {
-	main->sailOrientation = so_broadReach;	
-	controller->four.started = false;	
-    }
-    if (controller->five.started)
-    {
-	main->sailOrientation = so_running;	
-	controller->five.started = false;	
-    }
 }
 
 //External calls
@@ -419,10 +370,11 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
     char* testPath = "../data/textures/cat_tester.bmp";
     char* windModelTexture = "../data/textures/boat_wind_dir_uvs_v2.bmp";
     char* speedometerTexture = "../data/textures/speedometer_uvs.bmp";
-    char* texPaths[256] = {testPath, windModelTexture, speedometerTexture};
+    char* boatTexture = "../data/textures/boat_uv.bmp";
+    char* texPaths[256] = {testPath, windModelTexture, speedometerTexture, boatTexture};
     initData->gameTextures = gameFrameworkCode->GameLoadTextures(texPaths,
 								 platformInfo->frameworkArenas.setupArena,
-								 3,
+								 4,
 								 DEBUGPlatformReadEntireFile,
 								 memoryPoolCode);
     
@@ -531,6 +483,7 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
 					   memoryPoolCode,
 					   false,
 					   Identity());
+
 
     //WAVES
 
@@ -652,7 +605,7 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
 					   initData->boat.objInfo->modelMatrix);
     initData->boat.speedometerBottom->textureInfo = tl_speedometer;
 
-    initData->boat.speedOmeter.localRollStart = -(22.0f / 2.0f);    
+    initData->boat.speedOmeter.localRollStart = -(22.0f);    
     transform speedTopTransform = {};
     speedTopTransform.location = {0.0f, 0.0f, 0.0f};
     speedTopTransform.rotation = QuaternionFromEuler(0.0f, 0.0f, initData->boat.speedOmeter.localRollStart);
@@ -668,8 +621,7 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
     initData->boat.speedOmeter.movingMesh->textureInfo = tl_speedometer;
 
     initData->boat.speedOmeter.minRoll = 90.0f;
-    initData->boat.speedOmeter.maxRoll = speedTopTransform.rotation.z;
-
+    initData->boat.speedOmeter.maxRoll = -90.0f;
 //BOAT
 #if 0    
     v4 camOffset = {-4.2f, 0.04f, 0.77f, 0.0f};
@@ -733,7 +685,7 @@ ComputeObjectRotationForForward(v2 localForward, v2 worldForward, v4 qParentQuat
 }
 
 internal void
-ChangeCamOffset(static_cam_location newCamLocation, boat_entity* boat)
+ChangeCamOffset(static_cam_location newCamLocation, boat_entity* boat, game_state* gameState)
 {
     if (newCamLocation == boat->staticCamLocation)
 	return;
@@ -769,6 +721,12 @@ ChangeCamOffset(static_cam_location newCamLocation, boat_entity* boat)
 	}
     } break;
     };
+
+    if (newCamLocation != scl_center)
+    {
+	if (!gameState->tutorialData.movedToSides)
+	    gameState->tutorialData.movedToSides = true;
+    }
 }
 
 internal v4
@@ -937,6 +895,7 @@ ApplyBoatWaveRotations(boat_entity* boat, r32 deltaTime)
     boat->waveInfo.t += timeStep * deltaTime;
     wave_computation wave = ComputeWave(boat, currentYawAngle);
     v4 qWave = wave.n;
+    boat->vOutput = qWave;
     v4 localUp = {0.0f, 1.0f, 0.0f, 0.0f};
     v4 v = CrossV3(localUp, qWave);
 
@@ -986,7 +945,7 @@ UpdateChildModelMatrix(spawned_obj_info* child, spawned_obj_info* parent)
 #define NO_ROTATION 2
 
 internal joystick_rotation
-UpdateJoystickInformation(joystick_rotation* oldRotation, r32 x, r32 y)
+UpdateJoystickInformation(joystick_rotation* oldRotation, r32 x, r32 y, bool32 wasInDeadzone)
 {
     joystick_rotation result = {};
 
@@ -997,27 +956,31 @@ UpdateJoystickInformation(joystick_rotation* oldRotation, r32 x, r32 y)
     
     result.angle = angle;
 
-
     result.quad = (i32)(angle / 90.0f);
-    
+    if (wasInDeadzone)
+    {
+	result.clockwise = NO_ROTATION;
+	return(result);
+    }
 
     r32 diff = result.angle - oldRotation->angle;
 
     if (diff > 180.0f) diff -= 360.0f;
     if (diff < -180.0f) diff += 360.0f;
 
-    r32 epsilon = 0.001f;
-    if (diff < -epsilon)
+//    r32 epsilon = 0.001f;
+    r32 minAngSpeed = 1.0f;
+    if (diff < -minAngSpeed)
     {
 	result.clockwise = ROTATION_CLOCKWISE;
     }
-    else if (diff > epsilon)
+    else if (diff > minAngSpeed)
     {
 	result.clockwise = ROTATION_COUNTERCLOCKWISE;
     }
     else
     {
-	result.clockwise = oldRotation->clockwise;
+	result.clockwise = NO_ROTATION;
     }
     return(result);
 }
@@ -1030,14 +993,21 @@ InterpretControllerInformation(game_controller_input* pad, bool32 rotateClockwis
     r32 sailDeg = rotateClockwise ? -SAILMOVEMENTSENS : SAILMOVEMENTSENS;
     r32 winchDeg = rotateClockwise ? -0.5f : 0.5f;
     v4 yAxis = {0.0f, 1.0f, 0.0f, 0.0f};
-    if ((pad->moveRight.endedDown) || (pad->moveLeft.endedDown) ||
-	(pad->moveUp.endedDown) || (pad->moveDown.endedDown))
-    {
-	*newJoystick = UpdateJoystickInformation(oldJoystick,
-					     pad->leftStickAverageX,
-					     pad->leftStickAverageY);
 
-	if (newJoystick->clockwise == rotateClockwise)
+    r32 x = pad->leftStickAverageX;
+    r32 y = pad->leftStickAverageY;
+    r32 stickMagSq = (x * x) + (y * y);
+    r32 deadzoneSq = 0.2f * 0.2f;
+    
+
+    if (stickMagSq > deadzoneSq)
+    {
+	bool32 wasInDeadzone = (oldJoystick->clockwise == NO_ROTATION && oldJoystick->angle == 0.0f && oldJoystick->quad == 0);
+	*newJoystick = UpdateJoystickInformation(oldJoystick,
+						 x, y, wasInDeadzone);
+				
+
+	if ((newJoystick->clockwise == rotateClockwise))
 	{
 	    newYaw = inputYaw + sailDeg;
 
@@ -1058,10 +1028,8 @@ InterpretControllerInformation(game_controller_input* pad, bool32 rotateClockwis
     else
     {
 	newJoystick->clockwise = NO_ROTATION;
-	newJoystick->angle = (r32)RAD2DEG(atan2f(pad->leftStickAverageY, pad->leftStickAverageX));
-	if (newJoystick->angle < 0.0f) newJoystick->angle += 360.0f;
-	newJoystick->quad = (i32)(newJoystick->angle / 90.0f);
-
+	newJoystick->angle = 0.0f;
+	newJoystick->quad = 0;
     }
     *oldJoystick = *newJoystick;
     
@@ -1090,6 +1058,33 @@ RotateSpeedOMeter(boat_entity* boat)
     
     boat->speedOmeter.movingMesh->modelMatrix = boat->speedOmeter.movingMesh->localMatrix * newMat;
 }
+
+internal void
+DebugInputs(game_controller_input* keyboard, game_controller_input* gamePad, boat_entity* boat)
+{
+    if (keyboard->two.started)
+    {
+	boat->sailInfo.windDirection = {1.0f, 0.0f, 0.0f, 0.0f};
+	keyboard->two.started = false;
+    }
+    if (keyboard->three.started)
+    {
+	boat->sailInfo.windDirection = {0.0f, 0.0f, 1.0f, 0.0f};
+	keyboard->three.started = false;
+    }
+    if (keyboard->four.started)
+    {
+	boat->sailInfo.windDirection = {-1.0f, 0.0f, 0.0f, 0.0f};
+	keyboard->four.started = false;
+    }
+    if (keyboard->five.started)
+    {
+	boat->sailInfo.windDirection = {0.0f, 0.0f, -1.0f, 0.0f};	
+	keyboard->five.started = false;
+    }
+}
+
+#include "sail_data_collection.cpp"
 
 extern "C" SAIL_UPDATE(SailUpdate)
 {
@@ -1134,39 +1129,52 @@ extern "C" SAIL_UPDATE(SailUpdate)
 		//d
 		camera->position = camera->position + (camera->right * camVelocity);
 	    }
-
-
-
 	}
 	else
 	{
-
-	    //eventually, it would be nice if the movement was also dependent
-	    //on the velocity of the boat, meaning we turn more or less depending on how fast the boat
-	    //is moving or if the boat is moving at all
-	    //Q
-
 	    sail_type* main = &boat->sailInfo.mainSail;
 
 	    r32 velocity = boat->movementSpeed * deltaTime;
 
 	    wind_sock* windSock = &boat->windSock;
 
-	
-	    boat->objInfo->modelTransform.location = boat->objInfo->modelTransform.location + (boat->forward * velocity);
+	    DebugInputs(controller, padController, boat);
+	    v4 newLocation = {};
+	    if (boat->movementDirection == bmd_forward)
+	    {
+		newLocation = boat->objInfo->modelTransform.location + (boat->forward * velocity);
+	    }
+	    else
+	    {
+		//this is supposed to be according to the waves, the direction of the waves
+		//is not currently saved so I'm just using the opposite of the wind, which is what it
+		//happens to currently be,
+		//EDIT: You're using a direction, you just have to save it, its in the ComputeWave func
+		newLocation = boat->objInfo->modelTransform.location + (NegateVector(boat->sailInfo.windDirection) * velocity);
+	    }
+
+	    boat->objInfo->modelTransform.location = boat->objInfo->modelTransform.location + (boat->forward * velocity);	    
 	    boat->objInfo->modelMatrix = CreateModelMatrix(boat->objInfo->modelTransform.scale,
 							   boat->objInfo->modelTransform.rotation,
 							   boat->objInfo->modelTransform.location);
 
 
 	    CalculateCameraLocation(camera, boat);
-
-
-
+	    r32 speedCheck = boat->movementSpeed > (boat->topSpeed - 1.0f);
+	    if ((!gameState->tutorialData.upToSpeed) && (speedCheck))
+	    {
+		gameState->tutorialData.upToSpeed = true;
+	    }
+	    else if ((gameState->tutorialData.upToSpeed) && !speedCheck)
+	    {
+		gameState->tutorialData.upToSpeed = false;
+	    }
+		
+	    
 	    
 	    if ((controller->moveDown.started) || (padController->five.halfTransitionCount == 1 && padController->five.endedDown))
 	    {
-		ChangeCamOffset(static_cam_location::scl_left, boat);
+		ChangeCamOffset(static_cam_location::scl_left, boat, gameState);
 		CalculateCameraLocation(camera, boat);
 		controller->moveDown.started = false;
 	    }
@@ -1174,7 +1182,7 @@ extern "C" SAIL_UPDATE(SailUpdate)
 	    //E
 	    if ((controller->moveUp.started) || (padController->six.halfTransitionCount == 1 && padController->six.endedDown))
 	    {
-		ChangeCamOffset(static_cam_location::scl_right, boat);
+		ChangeCamOffset(static_cam_location::scl_right, boat, gameState);
 		CalculateCameraLocation(camera, boat);
 		controller->moveUp.started = false;
 
@@ -1198,8 +1206,16 @@ extern "C" SAIL_UPDATE(SailUpdate)
 		camera->xChange = deltaTime * (-padController->rightStickAverageX * PADSENS);
 		camera->yChange = deltaTime * (padController->rightStickAverageY * PADSENS);
 	    }
-	    
-	    r32 turnSpeed = 4.0f;
+
+	    r32 turnSpeed = 0.0f;
+	    if (boat->movementDirection == bmd_forward)
+	    {
+		turnSpeed = (40.0f * boat->movementSpeed) * deltaTime;
+	    }
+	    else
+	    {
+		turnSpeed = 0.5f;
+	    }
 	    r32 turnSlerp = 10.0f;
 	    r32 currYaw = boat->targetBoatRotations.yaw;
 
@@ -1246,30 +1262,6 @@ extern "C" SAIL_UPDATE(SailUpdate)
 		    if (controller->moveLeft.endedDown)
 		    {
 			main->targetYaw = main->targetSailRotations.y - sailTurnSpeed;
-
-#if 0
-#if 0		       
-			main->qSailRot = RotateOBJ(boat->mast,
-						   deltaTime,
-						   main->startRot,
-						   &main->qTargetRot,
-						   boat->lerpTimeSpeed,
-						   zAxis,
-						   (r32)-sailDeg,
-						   boat->objInfo->modelMatrix);
-#else
-			main->qSailRot = RotateOBJLocal(boat->mast,
-							deltaTime,
-							main->startRot,
-							&main->qTargetRot,
-							boat->lerpTimeSpeed,
-							zAxis,
-							(r32)-sailDeg,
-							&main->rotOffset);
-
-#endif
-#endif			
-						
 		    }
 		}
 		else if (boat->staticCamLocation == static_cam_location::scl_right)
@@ -1286,30 +1278,6 @@ extern "C" SAIL_UPDATE(SailUpdate)
 		    if (controller->moveRight.endedDown)
 		    {
 			main->targetYaw = main->targetSailRotations.y + sailTurnSpeed;
-
-#if 0
-#if 0			
-			main->qSailRot = RotateOBJ(boat->mast,
-						   deltaTime,
-						   main->startRot,
-						   &main->qTargetRot,
-						   boat->lerpTimeSpeed,
-						   zAxis,
-						   (r32)sailDeg,
-						   boat->objInfo->modelMatrix);
-
-#else
-			main->qSailRot = RotateOBJLocal(boat->mast,
-							deltaTime,
-							main->startRot,
-							&main->qTargetRot,
-							boat->lerpTimeSpeed,
-							zAxis,
-							(r32)sailDeg,
-							&main->rotOffset);
-
-#endif
-#endif			
 		    }
 		}
 	    }
@@ -1318,10 +1286,10 @@ extern "C" SAIL_UPDATE(SailUpdate)
 	    boat->targetBoatRotations.yaw = Lerp(currYaw, boat->currTargetYaw, 1.0f - expf(-deltaTime * turnSlerp));
 
 
-	    main->targetSailRotations.yaw = Lerp(currSailYaw, main->targetYaw, 1.0f - expf(-deltaTime * turnSailSlerp));
-//	    main->targetSailRotations.yaw = main->targetYaw;
+//	    main->targetSailRotations.yaw = Lerp(currSailYaw, main->targetYaw, 1.0f - expf(-deltaTime * turnSailSlerp));
+	    main->targetSailRotations.yaw = main->targetYaw;
 
-#if 1
+
 	    v4 targetSailRot = QuaternionFromEuler(main->targetSailRotations.pitch,
 						   main->targetSailRotations.yaw,
 						   main->targetSailRotations.roll);
@@ -1330,17 +1298,9 @@ extern "C" SAIL_UPDATE(SailUpdate)
 	    boat->mast->localMatrix = CreateModelMatrix(boat->mast->localTransform.scale,
 							boat->mast->localTransform.rotation,
 							boat->mast->localTransform.location);
-#endif	    
-#if 0
-	    main->qSailRot = RotateOBJ(boat->mast,
-				       main->targetSailRotations,
-				       main->qSailRot,
-				       deltaTime,
-				       boat->objInfo->modelMatrix);
-#endif
 	    
 	    ApplyBoatWaveRotations(boat, deltaTime);	
-	    ProcessSailInputs(controller, boat);
+
 	    UpdateBoatVectors(boat);
 
 
@@ -1415,6 +1375,9 @@ extern "C" SAIL_UPDATE(SailUpdate)
     }
 
     gameFrameworkCode->GameUpdateCamera(camera);
+    RunPlayerTutorial(gameState);
 
+    boat->sailInfo.windRotation = UpdateWindDirection(boat->sailInfo.windRotation, boat->sailInfo.windDirection);
+    boat->sailInfo.windDirection = boat->sailInfo.windRotation.newWindDirection;
 
 }

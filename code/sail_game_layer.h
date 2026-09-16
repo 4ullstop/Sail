@@ -3,6 +3,7 @@
 #include "D:/ExternalCustomAPIs/Game/code/game_framework_dll_include.h"
 #include "D:/ExternalCustomAPIs/MemoryPools/code/memory_pool_dll_include.h"
 #include "D:/ExternalCustomAPIs/OBJLoader/code/obj_parser_dll_include.h"
+#include "sail_data_collection.h"
 
 #if defined(_MSC_VER)
 #define GAME_CALL __vectorcall
@@ -11,6 +12,12 @@
 #else
 #define GAME_CALL
 #endif
+
+struct game_state
+{
+    tutorial_data tutorialData;
+    r32 msPerFrame;
+};
 
 enum sail_orientation
 {
@@ -61,9 +68,17 @@ struct sail_type
     angle_comparison sailToBoat;
 };
 
+struct wind_rotation_update
+{
+    v4 targetWindDirection;
+    v4 newWindDirection;
+    bool32 windInRotation;
+};
+
 struct sailing
 {
     v4 windDirection;
+    wind_rotation_update windRotation;
     r32 windSpeed;
     sail_type mainSail;
 };
@@ -133,9 +148,16 @@ struct speedometer
     r32 minRoll;
 };
 
+enum boat_movement_direction
+{
+    bmd_forward,
+    bmd_waves,
+};
+
 struct boat_entity
 {
-
+    boat_movement_direction movementDirection;
+    
     boat_cam_mode boatCameraMode;
 //Quaternions
     v4 qTargetRot;
@@ -199,6 +221,7 @@ struct boat_entity
 
     i32 output;
     r32 rOutput;
+    v4 vOutput;
 };
 
 
@@ -256,7 +279,7 @@ GetForwardVector(r32 pitch, r32 yaw)
 }
 
 
-#define SAIL_UPDATE(name) void GAME_CALL name(game_framework_dll_code* gameFrameworkCode, memory_pool_dll_code* memoryPoolCode, game_input* input, game_camera* camera, r32 deltaTime, sail_initialize_data* initData)
+#define SAIL_UPDATE(name) void GAME_CALL name(game_framework_dll_code* gameFrameworkCode, memory_pool_dll_code* memoryPoolCode, game_input* input, game_camera* camera, r32 deltaTime, sail_initialize_data* initData, game_state* gameState)
 typedef SAIL_UPDATE(sail_update);
 
 //replace sail_initialize_data w/ game_camera, put sail_initialize_data as pointer and make it a magic function
