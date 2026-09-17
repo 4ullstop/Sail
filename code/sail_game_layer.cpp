@@ -19,28 +19,111 @@
 //A lot of this information pertaining to the boat dimensions, wave angles etc... may need to be stored
 //at some point in the future
 //x: x, y: z, z: t
+internal v3
+FromV4ToV3Rotations(v4 v)
+{
+    v3 result =
+    {
+	v.pitch,
+	v.yaw,
+	v.roll
+    };
+    return(result);
+}
+
+r32 Clamp(r32 value, r32 min, r32 max)
+{
+    if (value < min) return min;
+    if (value > max) return max;
+    return (value);
+}
+
+
+internal v4
+GetForwardFromQuat(v4 inQuat, r32* pitch, r32* yaw)
+{
+    v4 quat = QuaternionNormalize(inQuat);
+
+    r32 forwardX = 2.0f * (quat.x * quat.z + quat.y * quat.w);
+    r32 forwardY = 2.0f * (quat.y * quat.z - quat.x * quat.w);
+    r32 forwardZ = 1.0f - 2.0f * (quat.x * quat.x + quat.y * quat.y);
+
+    if (pitch)
+    {
+	*pitch = asinf(Clamp(forwardY, -1.0f, 1.0f));
+    }
+    if (yaw)
+    {
+	*yaw = atan2f(forwardX, forwardZ);
+    }
+
+    v4 result = GetForwardVector(*pitch, *yaw);
+    return(result);
+}
+
+internal v4
+GetForwardFromQuat(v4 inQuat, r32 pitch, r32 yaw)
+{
+    v4 quat = QuaternionNormalize(inQuat);
+
+    r32 forwardX = 2.0f * (quat.x * quat.z + quat.y * quat.w);
+    r32 forwardY = 2.0f * (quat.y * quat.z - quat.x * quat.w);
+    r32 forwardZ = 1.0f - 2.0f * (quat.x * quat.x + quat.y * quat.y);
+
+    if (pitch)
+    {
+	pitch = asinf(Clamp(forwardY, -1.0f, 1.0f));
+    }
+    if (yaw)
+    {
+	yaw = atan2f(forwardX, forwardZ);
+    }
+
+    v4 result = GetForwardVector(pitch, yaw);
+    return(result);    
+}
 
 //supply in degrees
 internal void
-AddTargetWindRotation(r32 rotationAdditive, wind_rotation_update windRotation)
+AddTargetWindRotation(r32 rotationAdditive, wind_rotation_update* windRotation)
 {
-    v4 qAdditive = QuaternionFromEuler(0.0f, rotatoinAdditive, 0.0f);
-    
+    windRotation->eTargetRotations.yaw += rotationAdditive;
+    if (windRotation->eTargetRotations.yaw > 360.0f)
+    {
+	r32 diff = windRotation->eTargetRotations.yaw - 360.0f;
+	windRotation->eTargetRotations.yaw = (r32)fabs(diff);
+    }
 }
 
-internal wind_rotation_update
-UpdateWindDirection(wind_rotation_update currentWindInfo, v4 currentWindDirection)
+//currentWindDirection is input as a forward
+internal void
+UpdateWindDirection(wind_rotation_update* currentWindInfo, v4* currentWindDirection, r32 deltaTime)
 {
-    wind_rotation_update result = {};
-    if ((currentWindInfo.targetWindDirection != currentWindDirection) && (!currentWindInfo.windInRotation))
+    if (currentWindInfo->windInRotation)
     {
-	result.targetWindDirection = currentWindInfo.targetWindDirection;
-	result.windInRotation = true;
+	currentWindInfo->currentLerp += 0.3f * deltaTime;
+	currentWindInfo->eCurrentRotations.yaw = Lerp(currentWindInfo->eStartRotations.yaw, currentWindInfo->eTargetRotations.yaw, currentWindInfo->currentLerp);
+
+	v4 targetQuat = QuaternionFromEuler((r32)DEG2RAD(currentWindInfo->eCurrentRotations.pitch),
+					    (r32)DEG2RAD(currentWindInfo->eCurrentRotations.yaw),
+					    (r32)DEG2RAD(currentWindInfo->eCurrentRotations.roll));
+	targetQuat = QuaternionNormalize(targetQuat);
+
+	*currentWindDirection = GetForwardFromQuat(targetQuat,
+						   (r32)DEG2RAD(currentWindInfo->eCurrentRotations.pitch),
+						   (r32)DEG2RAD(currentWindInfo->eCurrentRotations.yaw));
+
+	
+	if (currentWindInfo->currentLerp >= 1.0f)
+	{
+	    currentWindInfo->windInRotation = false;
+	}
     }
-    else if (currentWindInfo.windInRotation)
+    else if ((currentWindInfo->eTargetRotations.yaw != currentWindInfo->eCurrentRotations.yaw) && (!currentWindInfo->windInRotation))
     {
-	//update current wind direction
-	result.newWindDirection = 
+	currentWindInfo->currentLerp = 0.0f;
+	currentWindInfo->windInRotation = true;
+	currentWindInfo->eStartRotations = currentWindInfo->eCurrentRotations;
     }
 }
 
@@ -142,35 +225,6 @@ ComputeWave(boat_entity* boat, r32 boatYaw)
 }
 
 //Sailing mechanic
-
-r32 Clamp(r32 value, r32 min, r32 max)
-{
-    if (value < min) return min;
-    if (value > max) return max;
-    return (value);
-}
-
-internal v4
-GetForwardFromQuat(v4 inQuat, r32* pitch, r32* yaw)
-{
-    v4 quat = QuaternionNormalize(inQuat);
-
-    r32 forwardX = 2.0f * (quat.x * quat.z + quat.y * quat.w);
-    r32 forwardY = 2.0f * (quat.y * quat.z - quat.x * quat.w);
-    r32 forwardZ = 1.0f - 2.0f * (quat.x * quat.x + quat.y * quat.y);
-
-    if (pitch)
-    {
-	*pitch = asinf(Clamp(forwardY, -1.0f, 1.0f));
-    }
-    if (yaw)
-    {
-	*yaw = atan2f(forwardX, forwardZ);
-    }
-
-    v4 result = GetForwardVector(*pitch, *yaw);
-    return(result);
-}
 
 internal r32
 CalculateRegularDropOff(r32 x, r32 y, r32 radius)
@@ -537,6 +591,7 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
     initData->boat.sailInfo.mainSail.locationOffset = mastLocation;
     initData->boat.sailInfo.mainSail.startRot = 
 	initData->boat.sailInfo.mainSail.qTargetRot = QuaternionIdentity();
+
     transform mastTransform = {};
     mastTransform.location = mastLocation;
     mastTransform.rotation = QuaternionIdentity();
@@ -649,7 +704,12 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
     initData->boat.movementSpeed =     
 	initData->boat.bottomSpeed = 1.0f;
 
+
     initData->boat.sailInfo.windDirection = v4{1.0f, 0.0f, 0.0f, 0.0f};
+
+    initData->boat.sailInfo.windRotation.eStartRotations =
+	initData->boat.sailInfo.windRotation.eTargetRotations = 
+	initData->boat.sailInfo.windRotation.eCurrentRotations = FromV4ToV3Rotations(GetEulerFromForwardD(initData->boat.sailInfo.windDirection));
     
     CalculateCameraLocation(&cameraResult, &initData->boat);
 #endif    
@@ -1375,9 +1435,9 @@ extern "C" SAIL_UPDATE(SailUpdate)
     }
 
     gameFrameworkCode->GameUpdateCamera(camera);
-    RunPlayerTutorial(gameState);
+    RunPlayerTutorial(gameState, &boat->sailInfo);
 
-    boat->sailInfo.windRotation = UpdateWindDirection(boat->sailInfo.windRotation, boat->sailInfo.windDirection);
-    boat->sailInfo.windDirection = boat->sailInfo.windRotation.newWindDirection;
+    UpdateWindDirection(&boat->sailInfo.windRotation, &boat->sailInfo.windDirection, deltaTime);
+
 
 }

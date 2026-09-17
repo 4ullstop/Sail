@@ -70,9 +70,11 @@ struct sail_type
 
 struct wind_rotation_update
 {
-    v4 targetWindDirection;
-    v4 newWindDirection;
+    v3 eTargetRotations;
+    v3 eCurrentRotations;
+    v3 eStartRotations;
     bool32 windInRotation;
+    r32 currentLerp;
 };
 
 struct sailing
@@ -264,7 +266,7 @@ struct inherited_location_info
 };
 
 
-inline v4
+inline v4 
 GetForwardVector(r32 pitch, r32 yaw)
 {
     v4 result =
@@ -277,7 +279,6 @@ GetForwardVector(r32 pitch, r32 yaw)
     result = NormalizeV3(result);
     return(result);
 }
-
 
 #define SAIL_UPDATE(name) void GAME_CALL name(game_framework_dll_code* gameFrameworkCode, memory_pool_dll_code* memoryPoolCode, game_input* input, game_camera* camera, r32 deltaTime, sail_initialize_data* initData, game_state* gameState)
 typedef SAIL_UPDATE(sail_update);
