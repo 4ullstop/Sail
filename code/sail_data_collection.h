@@ -5,6 +5,7 @@ enum tut_state
     ts_sideToSide,
     ts_upToSpeed,
     ts_windChange,
+    ts_storm,
 };
 
 struct tutorial_data
@@ -16,6 +17,8 @@ struct tutorial_data
 
     //recorded in seconds
     r32 timeSpentInState;
+
+    i32 windChangeAmount;
 };
 
 #define SAIL_DATA_COLLECTION_H

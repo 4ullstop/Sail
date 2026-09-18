@@ -68,6 +68,19 @@ struct sail_type
     angle_comparison sailToBoat;
 };
 
+struct rotational_update
+{
+    v3 eTargetRotations;
+    v3 eCurrentRotations;
+    v3 eStartRotations;
+    bool32 inRotation;
+    r32 currentLerp;
+    r32 lerpSpeed;
+
+    v4 vCurrent;
+    v4 qCurrent;
+};
+
 struct wind_rotation_update
 {
     v3 eTargetRotations;
@@ -81,6 +94,7 @@ struct sailing
 {
     v4 windDirection;
     wind_rotation_update windRotation;
+//    rotational_update windRotation; //put this in when finished refactoring
     r32 windSpeed;
     sail_type mainSail;
 };
@@ -106,15 +120,13 @@ struct wind_sock
     v4 targetRot;
 };
 
-struct sine_wave_properties
+struct wave_properties
 {
     r32 amplitude;
-    r32 period;
-    r32 horizontalShift;
-    r32 verticalShift;
-
-    r32 sineCrest;
-    r32 sineTrough;
+    r32 waveLength;
+    v3 waveDirection;
+    v3 eWaveDirection;
+    rotational_update waveRotations;
 };
 
 struct wave
@@ -124,7 +136,7 @@ struct wave
     v2 currentPoint;
     v2 tangentPoint;
     v2 normalPoint;
-    sine_wave_properties waveProperties;
+    wave_properties properties;
 
     v4 maxRotD;
     v4 minRotD;
