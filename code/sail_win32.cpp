@@ -825,9 +825,8 @@ int CALLBACK WinMain(HINSTANCE hInstance,
 
 		
 		char normalBoat[256];
-		sprintf_s(normalBoat, sizeof(normalBoat), "Time Spent In State: %f\n",
-			  gameState.tutorialData.timeSpentInState);
-
+		sprintf_s(normalBoat, sizeof(normalBoat), "Wave Level: %i\n",
+			  gameState.weatherLevel);
 
 				
 		

@@ -19,6 +19,10 @@
 //A lot of this information pertaining to the boat dimensions, wave angles etc... may need to be stored
 //at some point in the future
 //x: x, y: z, z: t
+
+global_variable r32 deltaTime;
+global_variable r32 msPerFrame;
+
 internal v3
 FromV4ToV3Rotations(v4 v)
 {
@@ -113,13 +117,28 @@ AddTargetYawRotation(r32 rotationAdditive, v3 currentRot)
     return(result);
 }
 
+internal lerp_update
+LerpUpdateValue(r32 lerpSpeed, r32 currentL, r32 start, r32 target)
+{
+    lerp_update result = {};
+    result.lerpP = currentL + (lerpSpeed * deltaTime);
+    result.value = Lerp(start, target, result.lerpP);
+    result.lerpRunning = result.lerpP >= 1.0f;
+    return(result);
+}
+
 internal void
-LerpUpdateRotationsYaw(rotational_update* inRots, r32 deltaTime)
+LerpUpdateRotationsYaw(rotational_update* inRots)
 {
     if (inRots->inRotation)
     {
-	inRots->currentLerp += inRots->lerpSpeed * deltaTime;
-	inRots->eCurrentRotations.yaw = Lerp(inRots->eStartRotations.yaw, inRots->eTargetRotations.yaw, inRots->currentLerp);
+	lerp_update lerpResult = LerpUpdateValue(inRots->lerpSpeed,
+						 inRots->currentLerp,
+						 inRots->eStartRotations.yaw,
+						 inRots->eTargetRotations.yaw);
+	inRots->currentLerp = lerpResult.lerpP;
+	inRots->eCurrentRotations.yaw = lerpResult.value;
+	inRots->inRotation = lerpResult.lerpRunning;
 
 	v4 targetQuat = QuaternionFromEuler((r32)DEG2RAD(inRots->eCurrentRotations.pitch),
 					    (r32)DEG2RAD(inRots->eCurrentRotations.yaw),
@@ -129,48 +148,18 @@ LerpUpdateRotationsYaw(rotational_update* inRots, r32 deltaTime)
 	inRots->vCurrent = GetForwardFromQuat(targetQuat,
 					      (r32)DEG2RAD(inRots->eCurrentRotations.pitch),
 					      (r32)DEG2RAD(inRots->eCurrentRotations.yaw));
-	if (inRots->currentLerp >= 1.0f)
-	{
-	    inRots->inRotation = false;
-	}
+
+
+
     }
     else if ((inRots->eTargetRotations.yaw != inRots->eCurrentRotations.yaw) && (!inRots->inRotation))
     {
 	inRots->currentLerp = 0.0f;
 	inRots->inRotation = true;
-	inRots->eStartRotations = inRots->eCurrentRotations;
-    }
-}
-
-//currentWindDirection is input as a forward
-internal void
-UpdateWindDirection(wind_rotation_update* currentWindInfo, v4* currentWindDirection, r32 deltaTime)
-{
-    if (currentWindInfo->windInRotation)
-    {
-	currentWindInfo->currentLerp += 0.3f * deltaTime;
-	currentWindInfo->eCurrentRotations.yaw = Lerp(currentWindInfo->eStartRotations.yaw, currentWindInfo->eTargetRotations.yaw, currentWindInfo->currentLerp);
-
-	v4 targetQuat = QuaternionFromEuler((r32)DEG2RAD(currentWindInfo->eCurrentRotations.pitch),
-					    (r32)DEG2RAD(currentWindInfo->eCurrentRotations.yaw),
-					    (r32)DEG2RAD(currentWindInfo->eCurrentRotations.roll));
-	targetQuat = QuaternionNormalize(targetQuat);
-
-	*currentWindDirection = GetForwardFromQuat(targetQuat,
-						   (r32)DEG2RAD(currentWindInfo->eCurrentRotations.pitch),
-						   (r32)DEG2RAD(currentWindInfo->eCurrentRotations.yaw));
-
-	
-	if (currentWindInfo->currentLerp >= 1.0f)
+	if (!inRots->resetStartRotation)
 	{
-	    currentWindInfo->windInRotation = false;
+	    inRots->eStartRotations = inRots->eCurrentRotations;
 	}
-    }
-    else if ((currentWindInfo->eTargetRotations.yaw != currentWindInfo->eCurrentRotations.yaw) && (!currentWindInfo->windInRotation))
-    {
-	currentWindInfo->currentLerp = 0.0f;
-	currentWindInfo->windInRotation = true;
-	currentWindInfo->eStartRotations = currentWindInfo->eCurrentRotations;
     }
 }
 
@@ -201,33 +190,198 @@ AddNoiseToBoat(void)
 }
 
 internal void
-AddNoiseToWaves(wave_properties* properties)
+UpdateTimer(timer* inTimer)
 {
-    r32 rand = RandomFloatInRange(2.0f, 5.0f);
-    properties->waveRotations.eCurrentRotations = AddTargetYawRotation(rand, properties->waveRotations.eStartRotations);
+    if (inTimer->running)
+    {
+	inTimer->time += msPerFrame / 1000.0f;
+    }
+    if (inTimer->endTime >= inTimer->time)
+    {
+	inTimer->running = false;
+	inTimer->time = 0.0f;
+    }
 }
 
-internal r32 
-WaveHeight(v2 points, r32 time, wave_properties* properties)
+internal void
+UpdateTimer(timer* inTimer, r32 setTime)
 {
-    r32 y = 0.0f;
-
-    r32 kMag = (2.0f * FM_PI) / properties->waveLength;
-    v4 waveForward = GetForwardVector((r32)DEG2RAD(properties->eWaveDirection.pitch),
-						   (r32)DEG2RAD(properties->eWaveDirection.yaw));
-
-    v2 waveDir = {waveForward.x, waveForward.z};
-
-    v2 k = {waveDir.x * kMag, waveDir.y * kMag}; //If you wanted to get uber technical, you can calculate this value
-    //by choosing a wave length in meters and then the angle it is travelling to the x axis
-    r32 kMagnitude = sqrtf((k.x * k.x) + (k.y * k.y));
-//our angular frequency w 
-    r32 w = (r32)sqrtf(kMagnitude * 9.81f);
-
-    r32 phase = (k.x * points.x) + (k.y * points.y) - (w * time);
-    y = properties->amplitude * sinf(phase);
-    return(y);
+    if (inTimer->running)
+    {
+	inTimer->time += msPerFrame / 1000.0f;
+    }
+    
+    if (inTimer->time >= setTime)
+    {
+	inTimer->running = false;
+	inTimer->time = 0.0f;
+	inTimer->endTime = setTime;
+    }
 }
+
+internal void
+UpdateTimerRandTime(timer* inTimer, r32 min, r32 max)
+{
+    if (inTimer->running)
+    {
+	inTimer->time += msPerFrame / 1000.0f;
+    }
+
+    if (inTimer->endTime >= inTimer->time)
+    {
+	inTimer->running = false;
+	inTimer->time = 0.0f;
+	inTimer->endTime = RandomFloatInRange(min, max);
+    }
+}
+
+internal r32
+WaveHeightSummation(v2 point, r32 time, wave_properties* properties)
+{
+    r32 totalY = 0.0f;
+    for (u32 i = 0; i < properties->waveCount; i++)
+    {
+	wave_component* wave = &properties->components[i];
+
+	r32 rad = (r32)DEG2RAD(wave->angleDegrees);
+	v2 waveDir = {cosf(rad), sinf(rad)};
+
+	r32 kMag = (2.0f * FM_PI) / wave->waveLength;
+	v2 k = {waveDir.x * kMag, waveDir.y * kMag};
+
+	r32 w = sqrtf(kMag * 9.81f) * wave->speed;
+
+	r32 phase = (k.x * point.x) + (k.y * point.y) - (w * time);
+	totalY += wave->amplitude * sinf(phase);
+    }
+
+    return(totalY);
+}
+
+internal r32
+GerstnerWaveHeight(v2 point, r32 time, wave_properties* properties)
+{
+    r32 totalY = 0.0f;
+    for (u32 i = 0; i < properties->waveCount; ++i)
+    {
+	wave_component* wave = &properties->components[i];
+
+	r32 rad = (r32)DEG2RAD(wave->angleDegrees);
+	v2 waveDir = {cosf(rad), sinf(rad)};
+	
+	r32 kMag = (2.0f * FM_PI) / wave->waveLength;
+	v2 k = {waveDir.x * kMag, waveDir.y * kMag};
+	r32 w = sqrtf(kMag * 9.81f) * wave->speed;
+
+	r32 phase = (k.x * point.x) + (k.y * point.y) - (w * time);
+
+	r32 q = 0.5f;
+	totalY += wave->amplitude * sinf(phase);
+    }
+    return(totalY);
+}
+
+internal void
+UpdateOceanProperties(wave_component* component, r32 amplitude, r32 waveLength, r32 angle, r32 speed)
+{
+    component->amplitude = amplitude;
+    component->waveLength = waveLength;
+    component->angleDegrees = angle;
+    component->speed = speed;
+}
+
+
+internal wave_properties
+CreateDefaultOceanProperties(void)
+{
+    wave_properties result = {};
+    result.waveCount = 4;
+
+    UpdateOceanProperties(&result.components[0], 0.1f, 32.0f, 45.0f, 1.0f);
+    UpdateOceanProperties(&result.components[1], 0.08f, 24.0f, 70.0f, 1.1f);
+    UpdateOceanProperties(&result.components[2], 0.025f, 22.0f, 25.0f, 1.2f);
+    UpdateOceanProperties(&result.components[3], 0.01f, 18.0f, 110.0f, 1.4f);
+
+
+    result.averageWaveDir = (45.0f + 70.0f + 25.0f + 110.0f) / result.waveCount;
+    return(result);
+}
+
+internal wave_properties
+MinMaxWaveProperties(void)
+{
+    wave_properties result = {};
+    result.waveCount = 8;
+    
+    UpdateOceanProperties(&result.components[0], 0.01f, 18.0f, 25.0f, 0.4f); //min
+    UpdateOceanProperties(&result.components[1], 0.1f, 32.0f, 110.0f, 0.6f);//max
+
+    UpdateOceanProperties(&result.components[2], 0.3f, 15.0f, 25.0f, 0.8f); //min
+    UpdateOceanProperties(&result.components[3], 0.7f, 36.0f, 110.0f, 1.0f);//max
+
+    UpdateOceanProperties(&result.components[4], 0.8f, 12.0f, 25.0f, 1.2f); //min
+    UpdateOceanProperties(&result.components[5], 1.0f, 39.0f, 110.0f, 1.0f);//max
+
+    UpdateOceanProperties(&result.components[6], 0.9f, 10.0f, 35.0f, 1.0f); //min
+    UpdateOceanProperties(&result.components[7], 1.5f, 45.0f, 180.0f, 1.4f);//max
+
+    return(result);
+}
+
+internal wave_properties
+CreateRandomOceanPropertiesFromLevel(e_weather_level weatherLevel, i32 waveCount, wave_component* waveLevels)
+{
+    wave_properties result = {};
+
+    i32 min = weatherLevel - 1;
+    i32 max = weatherLevel;
+    r32 waveDirTotal = 0.0f;
+    
+    for (i32 i = 0; i < waveCount; i++)
+    {
+	r32 amplitude = RandomFloatInRange(waveLevels[min].amplitude, waveLevels[max].amplitude);
+	r32 waveLength = RandomFloatInRange(waveLevels[min].waveLength, waveLevels[max].waveLength);
+	r32 angle = RandomFloatInRange(waveLevels[min].angleDegrees, waveLevels[max].angleDegrees);
+	r32 speed = RandomFloatInRange(waveLevels[min].speed, waveLevels[max].speed);
+	
+	UpdateOceanProperties(&result.components[i], amplitude, waveLength, angle, speed);
+	waveDirTotal += angle;
+    }
+
+    result.waveCount = waveCount;
+    result.averageWaveDir = waveDirTotal / waveCount;
+    return(result);
+}
+
+//as wave len and speed are inversely proportional amplitude and wave length are proportional
+internal void
+UpdateWavesOnWeatherLevel(game_state* gameState, wave_properties* properties, wave_properties* minMaxValues)
+{
+    switch(gameState->weatherLevel)
+    {
+    case ewl_1:
+    {
+	*properties = CreateDefaultOceanProperties();
+    } break;
+    case ewl_2:
+    {
+	*properties = CreateRandomOceanPropertiesFromLevel(ewl_2, properties->waveCount, minMaxValues->components);
+    } break;
+    case ewl_3:
+    {
+	*properties = CreateRandomOceanPropertiesFromLevel(ewl_4, properties->waveCount, minMaxValues->components);
+    } break;
+    case ewl_4:
+    {
+	*properties = CreateRandomOceanPropertiesFromLevel(ewl_3, properties->waveCount, minMaxValues->components);
+    } break;
+    default:
+    {
+	*properties = CreateRandomOceanPropertiesFromLevel(ewl_1, properties->waveCount, minMaxValues->components);
+    } break;
+    }
+}
+
 
 struct wave_computation
 {
@@ -262,11 +416,11 @@ ComputeWave(boat_entity* boat, r32 boatYaw)
     v2 portW = worldPos + portL;
     v2 starboardW = worldPos + starboardL;
 
-    r32 yBow = WaveHeight(bowW, time, &boat->waveInfo.properties);
-    r32 yStern = WaveHeight(sternW, time, &boat->waveInfo.properties);
-    r32 yPort = WaveHeight(portW, time, &boat->waveInfo.properties);
-    r32 yStarboard = WaveHeight(starboardW, time, &boat->waveInfo.properties);
 
+    r32 yBow = GerstnerWaveHeight(bowW, time, &boat->waveInfo.properties);
+    r32 yStern = GerstnerWaveHeight(sternW, time, &boat->waveInfo.properties);
+    r32 yPort = GerstnerWaveHeight(portW, time, &boat->waveInfo.properties);
+    r32 yStarboard = GerstnerWaveHeight(starboardW, time, &boat->waveInfo.properties);
 
 
     r32 yBmyS = yBow - yStern;
@@ -766,18 +920,31 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
 	initData->boat.bottomSpeed = 1.0f;
 
 
+/*
+  Wind Rotational setup 
+ */
+    initData->boat.sailInfo.windRotation.vCurrent =
     initData->boat.sailInfo.windDirection = v4{1.0f, 0.0f, 0.0f, 0.0f};
 
     initData->boat.sailInfo.windRotation.eStartRotations =
 	initData->boat.sailInfo.windRotation.eTargetRotations = 
 	initData->boat.sailInfo.windRotation.eCurrentRotations = FromV4ToV3Rotations(GetEulerFromForwardD(initData->boat.sailInfo.windDirection));
+    initData->boat.sailInfo.windRotation.lerpSpeed = 0.5f;
 
-    initData->boat.waveInfo.properties.amplitude = 0.2f;
-    initData->boat.waveInfo.properties.waveRotations.eStartRotations = 
-	initData->boat.waveInfo.properties.eWaveDirection = {0.0f, 90.0f, 0.0f};
-
-    initData->boat.waveInfo.properties.waveLength = 10.0f;
     
+
+/*
+  Wave Rotation setup
+ */
+
+    //This info controls the directions of the waves using eulers and forwards
+
+
+
+
+
+    initData->boat.waveInfo.properties = CreateDefaultOceanProperties();
+    initData->boat.waveInfo.waveMinMaxProperties = MinMaxWaveProperties();
     CalculateCameraLocation(&cameraResult, &initData->boat);
 #endif    
     return(cameraResult);
@@ -857,7 +1024,7 @@ ChangeCamOffset(static_cam_location newCamLocation, boat_entity* boat, game_stat
 }
 
 internal v4
-RotateOBJ(spawned_obj_info* obj, r32 roll, r32 pitch, r32 yaw, v4 qCurrRot, r32 deltaTime, m4 parentTransform)
+RotateOBJ(spawned_obj_info* obj, r32 roll, r32 pitch, r32 yaw, v4 qCurrRot, m4 parentTransform)
 {
     v3 result = {};
     v4 targetQuat = QuaternionFromEuler((r32)DEG2RAD(pitch), (r32)DEG2RAD(yaw), (r32)DEG2RAD(roll));
@@ -895,22 +1062,22 @@ RotateOBJ(spawned_obj_info* obj, r32 roll, r32 pitch, r32 yaw, v4 qCurrRot, r32 
 }
 
 internal v4
-RotateOBJ(spawned_obj_info* obj, v3 targetRotations, v4 qCurrRot, r32 deltaTime)
+RotateOBJ(spawned_obj_info* obj, v3 targetRotations, v4 qCurrRot)
 {
     m4 parentTransform = Identity();
-    return(RotateOBJ(obj, targetRotations.roll, targetRotations.yaw, targetRotations.pitch, qCurrRot, deltaTime, parentTransform));
+    return(RotateOBJ(obj, targetRotations.roll, targetRotations.yaw, targetRotations.pitch, qCurrRot, parentTransform));
 }
 
 internal v4
-RotateOBJ(spawned_obj_info* obj, v3 targetRotations, v4 qCurrRot, r32 deltaTime, m4 parentTransform)
+RotateOBJ(spawned_obj_info* obj, v3 targetRotations, v4 qCurrRot, m4 parentTransform)
 {
-    return(RotateOBJ(obj, targetRotations.roll, targetRotations.yaw, targetRotations.pitch, qCurrRot, deltaTime, parentTransform));
+    return(RotateOBJ(obj, targetRotations.roll, targetRotations.yaw, targetRotations.pitch, qCurrRot, parentTransform));
 }
 
 
 
 internal v4 
-RotateOBJ(spawned_obj_info* objInfo, r32 deltaTime, v4 startRot, v4* targetRot, r32 lerpSpeed, v4 axis, r32 degrees, m4 parentTransform)
+RotateOBJ(spawned_obj_info* objInfo, v4 startRot, v4* targetRot, r32 lerpSpeed, v4 axis, r32 degrees, m4 parentTransform)
 {
     *targetRot = QuaternionNormalize(*targetRot);
     *targetRot = QuaternionMultiply(*targetRot,
@@ -942,7 +1109,7 @@ RotateOBJ(spawned_obj_info* objInfo, r32 deltaTime, v4 startRot, v4* targetRot, 
 }
 
 internal v4
-TranslateOBJ(spawned_obj_info* objInfo, v4 start, v4 target, r32 lerpSpeed, r32 deltaTime, m4 parentTransform)
+TranslateOBJ(spawned_obj_info* objInfo, v4 start, v4 target, r32 lerpSpeed, m4 parentTransform)
 {
     r32 t = 1 - lerpSpeed * deltaTime;
     v4 t4 = {t, t, t, t};
@@ -970,19 +1137,19 @@ TranslateOBJ(spawned_obj_info* objInfo, v4 start, v4 target, r32 lerpSpeed, r32 
 }
 
 internal v4
-TranslateOBJ(spawned_obj_info* objInfo, v4 start, v4 target, r32 lerpSpeed, r32 deltaTime)
+TranslateOBJ(spawned_obj_info* objInfo, v4 start, v4 target, r32 lerpSpeed)
 {
-    return(TranslateOBJ(objInfo, start, target, lerpSpeed, deltaTime, Identity()));
+    return(TranslateOBJ(objInfo, start, target, lerpSpeed,  Identity()));
 }
 
 internal v4
-RotateOBJ(spawned_obj_info* objInfo, r32 deltaTime, v4 startRot, v4* targetRot, r32 lerpSpeed, v4 axis, r32 degrees)
+RotateOBJ(spawned_obj_info* objInfo, v4 startRot, v4* targetRot, r32 lerpSpeed, v4 axis, r32 degrees)
 {
-    return(RotateOBJ(objInfo, deltaTime, startRot, targetRot, lerpSpeed, axis, degrees, Identity()));
+    return(RotateOBJ(objInfo, startRot, targetRot, lerpSpeed, axis, degrees, Identity()));
 }
 
 internal v4
-RotateOBJLocal(spawned_obj_info* objInfo, r32 deltaTime, v4 startRot, v4* targetRot, r32 lerpSpeed, v4 axis, r32 degrees, v4* offsetAngle)
+RotateOBJLocal(spawned_obj_info* objInfo, v4 startRot, v4* targetRot, r32 lerpSpeed, v4 axis, r32 degrees, v4* offsetAngle)
 {
     *targetRot = QuaternionNormalize(*targetRot);
     *targetRot = QuaternionMultiply(*targetRot,
@@ -1005,7 +1172,7 @@ RotateOBJLocal(spawned_obj_info* objInfo, r32 deltaTime, v4 startRot, v4* target
 
 
 internal void
-ApplyBoatWaveRotations(boat_entity* boat, r32 deltaTime)
+ApplyBoatWaveRotations(boat_entity* boat)
 {
 
     r32 currentYawAngle = (r32)DEG2RAD(boat->targetBoatRotations.yaw);
@@ -1113,7 +1280,7 @@ UpdateJoystickInformation(joystick_rotation* oldRotation, r32 x, r32 y, bool32 w
 }
 
 r32 internal
-InterpretControllerInformation(game_controller_input* pad, bool32 rotateClockwise, boat_entity* boat, joystick_rotation* newJoystick, joystick_rotation* oldJoystick, r32 deltaTime, winch* rotatingWinch, r32 inputYaw)
+InterpretControllerInformation(game_controller_input* pad, bool32 rotateClockwise, boat_entity* boat, joystick_rotation* newJoystick, joystick_rotation* oldJoystick, winch* rotatingWinch, r32 inputYaw)
 {
     r32 newYaw = inputYaw;
     sail_type* main = &boat->sailInfo.mainSail;
@@ -1139,7 +1306,6 @@ InterpretControllerInformation(game_controller_input* pad, bool32 rotateClockwis
 	    newYaw = inputYaw + sailDeg;
 
 	    rotatingWinch->currRot = RotateOBJ(rotatingWinch->winchModel,
-				       deltaTime,
 				       rotatingWinch->startRot,
 				       &rotatingWinch->targetRot,
 				       boat->lerpTimeSpeed,
@@ -1187,7 +1353,7 @@ RotateSpeedOMeter(boat_entity* boat)
 }
 
 internal void
-DebugInputs(game_controller_input* keyboard, game_controller_input* gamePad, boat_entity* boat)
+DebugInputs(game_controller_input* keyboard, game_controller_input* gamePad, boat_entity* boat, game_state* gameState)
 {
     if (keyboard->two.started)
     {
@@ -1209,6 +1375,25 @@ DebugInputs(game_controller_input* keyboard, game_controller_input* gamePad, boa
 	boat->sailInfo.windDirection = {0.0f, 0.0f, -1.0f, 0.0f};	
 	keyboard->five.started = false;
     }
+
+    if (keyboard->six.started)
+    {
+	gameState->weatherLevel += 2;
+	if (gameState->weatherLevel > 8)
+	    gameState->weatherLevel = 0;
+
+	UpdateWavesOnWeatherLevel(gameState, &boat->waveInfo.properties, &boat->waveInfo.waveMinMaxProperties);
+	keyboard->six.started = false;
+    }
+    if (keyboard->seven.started)
+    {
+	gameState->weatherLevel -= 2;
+	if (gameState->weatherLevel < 0)
+	    gameState->weatherLevel = 7;
+
+	UpdateWavesOnWeatherLevel(gameState, &boat->waveInfo.properties, &boat->waveInfo.waveMinMaxProperties);
+	keyboard->seven.started = false;
+    }
 }
 
 #include "sail_data_collection.cpp"
@@ -1217,7 +1402,8 @@ extern "C" SAIL_UPDATE(SailUpdate)
 {
     //Update our input
     //Update our camera
-
+    deltaTime = gameDeltaTime;
+    msPerFrame = gameState->msPerFrame;
     game_controller_input* controller = GetController(input, 0);    
     game_controller_input* padController = GetController(input, 1);
     Assert(padController);
@@ -1256,16 +1442,23 @@ extern "C" SAIL_UPDATE(SailUpdate)
 		//d
 		camera->position = camera->position + (camera->right * camVelocity);
 	    }
+
 	}
 	else
 	{
+
+	    if (gameState->newWeatherLevel != gameState->weatherLevel)
+	    {
+		UpdateWavesOnWeatherLevel(gameState, &boat->waveInfo.properties, &boat->waveInfo.waveMinMaxProperties);
+		gameState->weatherLevel = gameState->newWeatherLevel;
+	    }
 	    sail_type* main = &boat->sailInfo.mainSail;
 
 	    r32 velocity = boat->movementSpeed * deltaTime;
 
 	    wind_sock* windSock = &boat->windSock;
 
-	    DebugInputs(controller, padController, boat);
+	    DebugInputs(controller, padController, boat, gameState);
 	    v4 newLocation = {};
 	    if (boat->movementDirection == bmd_forward)
 	    {
@@ -1273,17 +1466,8 @@ extern "C" SAIL_UPDATE(SailUpdate)
 	    }
 	    else
 	    {
-		v4 waveDir = GetForwardVector((r32)DEG2RAD(boat->waveInfo.properties.eWaveDirection.pitch),
-					      (r32)DEG2RAD(boat->waveInfo.properties.eWaveDirection.yaw));
-#if 0
-		v4 waveDir =
-		    {
-			boat->waveInfo.properties.waveDirection.x,
-			boat->waveInfo.properties.waveDirection.y,
-			boat->waveInfo.properties.waveDirection.z,
-			0.0f
-		    };
-#endif		
+		v4 waveDir = GetForwardVector(boat->waveInfo.properties.averageWaveDir, 0.0f);
+
 		newLocation = boat->objInfo->modelTransform.location + (waveDir * velocity);
 	    }
 
@@ -1389,7 +1573,6 @@ extern "C" SAIL_UPDATE(SailUpdate)
 								     boat,
 								     &initData->newJoystick,
 								     &initData->oldJoystick,
-								     deltaTime,
 								     &boat->winchL,
 								     main->targetSailRotations.y);
 
@@ -1405,7 +1588,6 @@ extern "C" SAIL_UPDATE(SailUpdate)
 								     boat,
 								     &initData->newJoystick,
 								     &initData->oldJoystick,
-								     deltaTime,
 								     &boat->winchR,
 								     main->targetSailRotations.y);
 
@@ -1433,8 +1615,8 @@ extern "C" SAIL_UPDATE(SailUpdate)
 							boat->mast->localTransform.rotation,
 							boat->mast->localTransform.location);
 	    
-	    AddNoiseToWaves(&boat->waveInfo.properties);
-	    ApplyBoatWaveRotations(boat, deltaTime);	
+
+	    ApplyBoatWaveRotations(boat);	
 
 	    UpdateBoatVectors(boat);
 
@@ -1510,9 +1692,11 @@ extern "C" SAIL_UPDATE(SailUpdate)
     }
 
     gameFrameworkCode->GameUpdateCamera(camera);
+    //add check if tutorial complete with tutorialComplete bool that you haven't made yet
     RunPlayerTutorial(gameState, &boat->sailInfo);
 
-//    UpdateWindDirection(&boat->sailInfo.windRotation, &boat->sailInfo.windDirection, deltaTime);
+    LerpUpdateRotationsYaw(&boat->sailInfo.windRotation);
+    boat->sailInfo.windDirection = boat->sailInfo.windRotation.vCurrent;
 
 
 }

@@ -14,7 +14,7 @@ RunPlayerTutorial(game_state* gameState, sailing* sailInfo)
     } break;
     case ts_upToSpeed:
     {
-	if (sailInfo->windRotation.windInRotation) return;
+	if (sailInfo->windRotation.inRotation) return;
 	if (gameState->tutorialData.upToSpeed)
 	    gameState->tutorialData.timeSpentInState += gameState->msPerFrame / 1000.0f;	    
 
@@ -47,7 +47,11 @@ RunPlayerTutorial(game_state* gameState, sailing* sailInfo)
     } break;
     case ts_storm:
     {
-	//Wreck havoc
+	if (!gameState->tutorialData.stormStarted)
+	{
+	    gameState->newWeatherLevel += 4;
+	    gameState->tutorialData.stormStarted = true;
+	}
     } break;
     default:
     {

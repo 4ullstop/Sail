@@ -4,6 +4,7 @@
 #include "D:/ExternalCustomAPIs/MemoryPools/code/memory_pool_dll_include.h"
 #include "D:/ExternalCustomAPIs/OBJLoader/code/obj_parser_dll_include.h"
 #include "sail_data_collection.h"
+#include "scripted_events.h"
 
 #if defined(_MSC_VER)
 #define GAME_CALL __vectorcall
@@ -13,10 +14,20 @@
 #define GAME_CALL
 #endif
 
+enum e_weather_level : u8
+{
+    ewl_1 = 2,
+    ewl_2 = 4,
+    ewl_3 = 6,
+    ewl_4 = 8,
+};
+
 struct game_state
 {
     tutorial_data tutorialData;
     r32 msPerFrame;
+    u8 weatherLevel;
+    u8 newWeatherLevel;
 };
 
 enum sail_orientation
@@ -79,22 +90,14 @@ struct rotational_update
 
     v4 vCurrent;
     v4 qCurrent;
-};
 
-struct wind_rotation_update
-{
-    v3 eTargetRotations;
-    v3 eCurrentRotations;
-    v3 eStartRotations;
-    bool32 windInRotation;
-    r32 currentLerp;
+    bool32 resetStartRotation;
 };
 
 struct sailing
 {
     v4 windDirection;
-    wind_rotation_update windRotation;
-//    rotational_update windRotation; //put this in when finished refactoring
+    rotational_update windRotation; //put this in when finished refactoring
     r32 windSpeed;
     sail_type mainSail;
 };
@@ -112,6 +115,13 @@ enum boat_cam_mode
     bcm_winch
 };
 
+struct timer
+{
+    r32 time;
+    bool32 running;
+    r32 endTime;
+};
+
 struct wind_sock
 {
     spawned_obj_info* model;
@@ -120,13 +130,35 @@ struct wind_sock
     v4 targetRot;
 };
 
-struct wave_properties
+struct lerp_update
+{
+    r32 value;
+    r32 lerpP; //lerp percent
+    bool32 lerpRunning;
+};
+
+struct real_update
+{
+    r32 target;
+    r32 start;
+
+    lerp_update updateInfo;
+};
+
+struct wave_component
 {
     r32 amplitude;
     r32 waveLength;
-    v3 waveDirection;
-    v3 eWaveDirection;
-    rotational_update waveRotations;
+    r32 angleDegrees;
+    r32 speed;
+};
+
+struct wave_properties
+{
+
+    u32 waveCount;
+    wave_component components[8];
+    r32 averageWaveDir;
 };
 
 struct wave
@@ -137,10 +169,8 @@ struct wave
     v2 tangentPoint;
     v2 normalPoint;
     wave_properties properties;
+    wave_properties waveMinMaxProperties;
 
-    v4 maxRotD;
-    v4 minRotD;
-    v4 qWaveTilt;
 };
 
 struct winch
@@ -292,7 +322,7 @@ GetForwardVector(r32 pitch, r32 yaw)
     return(result);
 }
 
-#define SAIL_UPDATE(name) void GAME_CALL name(game_framework_dll_code* gameFrameworkCode, memory_pool_dll_code* memoryPoolCode, game_input* input, game_camera* camera, r32 deltaTime, sail_initialize_data* initData, game_state* gameState)
+#define SAIL_UPDATE(name) void GAME_CALL name(game_framework_dll_code* gameFrameworkCode, memory_pool_dll_code* memoryPoolCode, game_input* input, game_camera* camera, r32 gameDeltaTime, sail_initialize_data* initData, game_state* gameState)
 typedef SAIL_UPDATE(sail_update);
 
 //replace sail_initialize_data w/ game_camera, put sail_initialize_data as pointer and make it a magic function

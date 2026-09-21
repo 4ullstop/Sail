@@ -14,6 +14,7 @@ struct tutorial_data
     bool32 movedToSides;
     bool32 upToSpeed;
     bool32 windChanged;
+    bool32 stormStarted;
 
     //recorded in seconds
     r32 timeSpentInState;
