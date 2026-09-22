@@ -184,12 +184,6 @@ RotateV2(v2 v, r32 angleR)
 }
 
 internal void
-AddNoiseToBoat(void)
-{
-    
-}
-
-internal void
 UpdateTimer(timer* inTimer)
 {
     if (inTimer->running)
@@ -643,6 +637,7 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
     char* texPaths[256] = {testPath, windModelTexture, speedometerTexture, boatTexture};
     initData->gameTextures = gameFrameworkCode->GameLoadTextures(texPaths,
 								 platformInfo->frameworkArenas.setupArena,
+								 platformInfo->frameworkArenas.perFrameArena,
 								 4,
 								 DEBUGPlatformReadEntireFile,
 								 memoryPoolCode);
