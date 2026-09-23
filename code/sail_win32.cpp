@@ -148,6 +148,7 @@ LRESULT CALLBACK Win32MainWindowProc(HWND hwnd,
 }
 
 
+
 internal void
 CreateShaders(shaders* gameShaders)
 {
@@ -213,6 +214,47 @@ CreateShaders(shaders* gameShaders)
 	&cbDesc,
 	nullptr,
 	&gameShaders->vsConstantBuffer);
+
+
+    /*
+      2D shaders
+     */
+
+    debug_read_file_result uiVsResult = DEBUGPlatformReadEntireFile(&blankThread, "../build/ui_vs.cso");
+    bytes = (BYTE*)uiVsResult.contents;
+    hr = d3dDevice->CreateVertexShader(fileResult.contents,
+				       fileResult.contentsSize,
+				       nullptr,
+				       &gameShaders->uiVertexShader);
+
+    D3D11_INPUT_ELEMENT_DESC uiIaDesc[] =
+    {
+	{
+	    "POSITION", 0, DXGI_FORMAT_R32G32_FLOAT,
+	    0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0
+	},
+
+	{
+	    "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,
+	    0, 8, D3D11_INPUT_PER_VERTEX_DATA, 0
+	},
+    };
+
+    hr = d3dDevice->CreateInputLayout(
+	uiIaDesc,
+	ArrayCount(uiIaDesc),
+	bytes,
+	uiVsResult.contentsSize,
+	&gameShaders->uiInputLayout);
+
+    debug_read_file_result uiPixelShaderResult = DEBUGPlatformReadEntireFile(&blankThread, "../build/ui_ps.cso");
+    bytes = (BYTE*)uiPixelShaderResult.contents;
+    hr = d3dDevice->CreatePixelShader(
+	uiPixelShaderResult.contents,
+	uiPixelShaderResult.contentsSize,
+	nullptr,
+	&gameShaders->uiPixelShader);
+
 }
 
 internal draw_buffers*
@@ -221,6 +263,12 @@ GetDrawBuffersFromSpawnable(win32_spawnable_objs* win32Objs, spawned_obj_info* i
     draw_buffers* result = 0;
     result = &win32Objs->objDrawnBuffers[info->type];
     return(result);
+}
+
+internal void
+Render2D(shaders* shader)
+{
+
 }
 
 internal void
@@ -683,6 +731,8 @@ int CALLBACK WinMain(HINSTANCE hInstance,
 
 	    backBuffer->GetDesc(&bbDesc);
 
+
+//3d	    
 	    CD3D11_TEXTURE2D_DESC depthStencilDesc(
 		DXGI_FORMAT_D24_UNORM_S8_UINT,
 		(UINT)bbDesc.Width,
@@ -700,6 +750,29 @@ int CALLBACK WinMain(HINSTANCE hInstance,
 						   &depthStencilViewDesc,
 						   &depthStencilView);
 
+
+//2d
+
+	    D3D11_DEPTH_STENCIL_DESC depthDesc2D = {};
+	    depthDesc2D.DepthEnable = FALSE;
+	    depthDesc2D.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ZERO;
+	    ID3D11DepthStencilState* disableDepthState;
+	    hr = d3dDevice->CreateDepthStencilState(&depthDesc2D, &disableDepthState);
+
+	    D3D11_BLEND_DESC blendDesc = {};
+	    blendDesc.RenderTarget[0].BlendEnable = TRUE;
+	    blendDesc.RenderTarget[0].SrcBlend = D3D11_BLEND_SRC_ALPHA;
+	    blendDesc.RenderTarget[0].DestBlend = D3D11_BLEND_INV_SRC_ALPHA;
+	    blendDesc.RenderTarget[0].BlendOp = D3D11_BLEND_OP_ADD;
+	    blendDesc.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_ONE;
+	    blendDesc.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_ZERO;
+	    blendDesc.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_ADD;
+	    blendDesc.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
+
+	    ID3D11BlendState* alphaBlendState;
+	    hr = d3dDevice->CreateBlendState(&blendDesc, &alphaBlendState);
+
+	    
 	    D3D11_VIEWPORT viewport = {};
 	    viewport.Height = (r32)bbDesc.Height;
 	    viewport.Width = (r32)bbDesc.Width;

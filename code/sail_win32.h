@@ -59,6 +59,11 @@ struct shaders
     ID3D11PixelShader* pixelShader;
 
     ID3D11InputLayout* vertexInputLayout;
+
+    ID3D11VertexShader* uiVertexShader;
+    ID3D11PixelShader* uiPixelShader;
+
+    ID3D11InputLayout* uiInputLayout;
 };
 
 struct object_constants

@@ -630,12 +630,16 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
 							     pgMem, memoryPoolCode, paths, 15);
 
     initData->isFreeCam = false;
-    char* testPath = "../data/textures/cat_tester.bmp";
-    char* windModelTexture = "../data/textures/boat_wind_dir_uvs_v2.bmp";
-    char* speedometerTexture = "../data/textures/speedometer_uvs.bmp";
-    char* boatTexture = "../data/textures/boat_uv.bmp";
-    char* texPaths[256] = {testPath, windModelTexture, speedometerTexture, boatTexture};
-    initData->gameTextures = gameFrameworkCode->GameLoadTextures(texPaths,
+
+    texture_load_info testPathLoadInfo = {"../data/textures/cat_tester.bmp", false};
+    texture_load_info windModelTexInfo = {"../data/textures/boat_wind_dir_uvs_v2.bmp", false};
+    texture_load_info speedometerTexInfo = {"../data/textures/speedometer_uvs.bmp", false};
+    texture_load_info boatTexInfo = {"../data/textures/boat_uv.bmp", false};    
+
+    texture_load_info allTextureInfo[4] = {testPathLoadInfo, windModelTexInfo, speedometerTexInfo, boatTexInfo};
+    
+
+    initData->gameTextures = gameFrameworkCode->GameLoadTextures(allTextureInfo,
 								 platformInfo->frameworkArenas.setupArena,
 								 platformInfo->frameworkArenas.perFrameArena,
 								 4,

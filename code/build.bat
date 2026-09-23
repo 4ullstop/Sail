@@ -16,6 +16,9 @@ REM start "C:\Program Files (x86)\Windows Kits\10\bin\10.0.18362.0\x64\fxc.exe" 
 fxc.exe -nologo /Od /Zi /T vs_5_0 /Fo vs.cso "S:\code\vs.hlsl"
 fxc.exe -nologo /Od /Zi /T ps_5_0 /Fo ps.cso "S:\code\ps.hlsl"
 
+fxc.exe -nologo /Od /Zi /T vs_5_0 /Fo ui_vs.cso "S:\code\ui_shader_vs.hlsl"
+fxc.exe -nologo /Od /Zi /T ps_5_0 /Fo ui_ps.cso "S:\code\ui_shader_ps.hlsl"
+
 
 cl %commonCompilerFlags% ..\code\sail_game_layer.cpp /LD /link /EXPORT:SailUpdate /EXPORT:SailInitialize
 
