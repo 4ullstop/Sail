@@ -27,6 +27,12 @@ global_variable ID3D11Texture2D* depthStencil;
 global_variable D3D11_TEXTURE2D_DESC bbDesc;
 
 global_variable ID3D11SamplerState* textureSamplerState;
+global_variable ID3D11SamplerState* uiTextureSamplerState;
+
+
+global_variable ID3D11DepthStencilState* disableDepthState;
+global_variable ID3D11BlendState* alphaBlendState;
+global_variable ID3D11Buffer* uiIndexBuffer;
 
 global_variable r32 screenWidth = 1280;
 global_variable r32 screenHeight = 720;
@@ -222,8 +228,8 @@ CreateShaders(shaders* gameShaders)
 
     debug_read_file_result uiVsResult = DEBUGPlatformReadEntireFile(&blankThread, "../build/ui_vs.cso");
     bytes = (BYTE*)uiVsResult.contents;
-    hr = d3dDevice->CreateVertexShader(fileResult.contents,
-				       fileResult.contentsSize,
+    hr = d3dDevice->CreateVertexShader(uiVsResult.contents,
+				       uiVsResult.contentsSize,
 				       nullptr,
 				       &gameShaders->uiVertexShader);
 
@@ -247,6 +253,7 @@ CreateShaders(shaders* gameShaders)
 	uiVsResult.contentsSize,
 	&gameShaders->uiInputLayout);
 
+
     debug_read_file_result uiPixelShaderResult = DEBUGPlatformReadEntireFile(&blankThread, "../build/ui_ps.cso");
     bytes = (BYTE*)uiPixelShaderResult.contents;
     hr = d3dDevice->CreatePixelShader(
@@ -254,6 +261,7 @@ CreateShaders(shaders* gameShaders)
 	uiPixelShaderResult.contentsSize,
 	nullptr,
 	&gameShaders->uiPixelShader);
+
 
 }
 
@@ -266,8 +274,33 @@ GetDrawBuffersFromSpawnable(win32_spawnable_objs* win32Objs, spawned_obj_info* i
 }
 
 internal void
-Render2D(shaders* shader)
+Render2D(shaders* shader, win32_spawnable_objs* win32Objs)
 {
+    for (i32 i = 0; i < win32Objs->numOf2DTextures; i++)
+    {
+	texture_buffers_2D* texture = &win32Objs->textureBuffers2D[i];
+	
+	context->OMSetDepthStencilState(disableDepthState, 0);
+	context->OMSetBlendState(alphaBlendState, NULL, 0xFFFFFFFF);
+
+
+	
+	context->VSSetShader(shader->uiVertexShader, nullptr, 0);
+	context->IASetInputLayout(shader->uiInputLayout);	
+	context->PSSetShader(shader->uiPixelShader, nullptr, 0);
+	context->PSSetShaderResources(0, 1, &texture->textureInfo->textureResourceView);
+	context->PSSetSamplers(0, 1, &uiTextureSamplerState);
+
+
+	context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	
+	UINT stride = sizeof(ui_vertex);
+	UINT offset = 0;
+	context->IASetVertexBuffers(0, 1, &texture->uiVertexBuffer, &stride, &offset);
+	context->IASetIndexBuffer(uiIndexBuffer, DXGI_FORMAT_R16_UINT, 0);
+
+	context->DrawIndexed(6, 0, 0);
+    }
 
 }
 
@@ -304,8 +337,14 @@ Render(game_loaded_objs* gameObjs, win32_spawnable_objs* win32Objs, sail_constan
 			 nullptr,
 			 0);
 
+    ID3D11ShaderResourceView* nullSRV = nullptr;
+    context->PSSetShaderResources(2, 1, &nullSRV);
+    context->PSSetShaderResources(0, 1, &nullSRV);
+    context->PSSetShaderResources(1, 1, &nullSRV);    
     
-    //Just rendering the small things we want to render
+    ID3D11SamplerState* nullSampler = nullptr;
+    context->PSSetSamplers(0, 1, &nullSampler);
+
     listed_memory_node* objNode = (listed_memory_node*)gameObjs->spawnedObjNodes;
 
     HRESULT hr = {};
@@ -375,6 +414,8 @@ Render(game_loaded_objs* gameObjs, win32_spawnable_objs* win32Objs, sail_constan
 
 	objNode = objNode->next;
     }
+
+    Render2D(shader, win32Objs);
 }
 
 int CALLBACK WinMain(HINSTANCE hInstance,
@@ -392,84 +433,11 @@ int CALLBACK WinMain(HINSTANCE hInstance,
 #if 0
     //v4
 
-    v4 fmRound = VectorRound(v);
-
-    //XMVECTOR
-
-    DirectX::XMVECTOR xmRound = DirectX::XMVectorRound(xmV);
-
-    v4 fmModAng = VectorModAngles(v);
-
-    DirectX::XMVECTOR xmModAng = DirectX::XMVectorModAngles(xmV);
-
-
-
-    m4 m = {};
-    m.r[0] = v;
-    m.r[1] = v;
-    m.r[2] = v;
-    m.r[3] = v;    
-
-    m4 fmQuat = MatrixRotationQuaternion(v);
-
-    DirectX::XMMATRIX xmQuat = DirectX::XMMatrixRotationQuaternion(xmV);
-
-
-    
-    v4 fmRN = QuaternionRotationNormal(v, 30.f);
-
-    DirectX::XMVECTOR xmRN = DirectX::XMQuaternionRotationNormal(xmV, 30.f);
-
-    v4 sin = VectorSin(v);
-
-    DirectX::XMVECTOR xmSin = DirectX::XMVectorSin(xmV);
-
-
-    v4 aTan = VectorATan(v);
-
-    DirectX::XMVECTOR xmATan = DirectX::XMVectorATan(xmV);
-    
-
-    
-    r32 scalar = 3.0f;
-    v4 vTwo = {v * scalar}; 
-    DirectX::XMVECTOR xmV2 = DirectX::XMVectorScale(xmV, 3.0f);
-    r32 t = 0.5f;
-    v4 t4 = {t, t, t, t};
-    v4 quat = QuaternionSlerpV(v, vTwo, t4);
-
-    DirectX::XMVECTOR xmt4 = DirectX::XMVectorSet(t, t, t, t);
-    DirectX::XMVECTOR xmQuat = DirectX::XMQuaternionSlerpV(xmV, xmV2, xmt4);
-
-
-    v4 mulQ = QuaternionMultiply(v, v);
-    
-    DirectX::XMVECTOR dxMulQ = DirectX::XMQuaternionMultiply(xmV, xmV);
-
-    v4 rotQ = Vector3Rotate(v, mulQ);
-
-    DirectX::XMVECTOR dxRotQ = DirectX::XMVector3Rotate(xmV, dxMulQ);
-
-
-    DirectX::XMVECTOR dxQE = DirectX::XMQuaternionRotationRollPitchYawFromVector(xmV);
-    v4 vQE = QuaternionFromEuler(v);
-
-
-    DirectX::XMVECTOR forward = {1.0f, 0.0f, 0.0f, 0.0f};
-    DirectX::XMVECTOR up = {0.0f, 1.0f, 0.0f, 0.0f};
-
-    DirectX::XMMATRIX lookAt = DirectX::XMMatrixLookToLH(DirectX::XMVectorZero(), forward, up);
-    DirectX::XMMATRIX rotMat = DirectX::XMMatrixTranspose(lookAt);
-    DirectX::XMVECTOR quat = DirectX::XMQuaternionRotationMatrix(rotMat);
-
-    v4 vForward = {1.0f, 0.0f, 0.0f, 0.0f};
-    
-    v4 test = CreateQuaternionRotationFromVector(vForward);
-#endif
-
     v4 eQTest = QuaternionFromEuler((r32)DEG2RAD(24.0f), 0.0f, 0.0f);
 
     DirectX::XMVECTOR eQTestDx = DirectX::XMQuaternionRotationRollPitchYaw((r32)DEG2RAD(24.0f), 0.0f, 0.0f);
+#endif
+
     
     UINT desiredSchedulerMs = 1;
     bool32 sleepIsGranular = (timeBeginPeriod(desiredSchedulerMs) == TIMERR_NOERROR);
@@ -756,7 +724,7 @@ int CALLBACK WinMain(HINSTANCE hInstance,
 	    D3D11_DEPTH_STENCIL_DESC depthDesc2D = {};
 	    depthDesc2D.DepthEnable = FALSE;
 	    depthDesc2D.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ZERO;
-	    ID3D11DepthStencilState* disableDepthState;
+
 	    hr = d3dDevice->CreateDepthStencilState(&depthDesc2D, &disableDepthState);
 
 	    D3D11_BLEND_DESC blendDesc = {};
@@ -769,7 +737,7 @@ int CALLBACK WinMain(HINSTANCE hInstance,
 	    blendDesc.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_ADD;
 	    blendDesc.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
 
-	    ID3D11BlendState* alphaBlendState;
+
 	    hr = d3dDevice->CreateBlendState(&blendDesc, &alphaBlendState);
 
 	    
@@ -827,6 +795,23 @@ int CALLBACK WinMain(HINSTANCE hInstance,
 
 	    //Creating the sampler states for textures
 
+	    u16 uiQuadIndices[] = {0, 1, 2, 2, 1, 3};
+	    
+	    CD3D11_BUFFER_DESC uiIndexDesc(
+		sizeof(u16) * 6,
+		D3D11_BIND_INDEX_BUFFER);
+
+	    D3D11_SUBRESOURCE_DATA uiIndexData;
+	    ZeroMemory(&uiIndexData, sizeof(D3D11_SUBRESOURCE_DATA));
+	    uiIndexData.pSysMem = uiQuadIndices;
+	    uiIndexData.SysMemPitch = 0;
+	    uiIndexData.SysMemSlicePitch = 0;
+
+
+ 
+	    hr = d3dDevice->CreateBuffer(&uiIndexDesc, &uiIndexData, &uiIndexBuffer);
+	    
+
 	    D3D11_SAMPLER_DESC samplerDesc = {};
 	    samplerDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
 	    samplerDesc.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
@@ -837,7 +822,18 @@ int CALLBACK WinMain(HINSTANCE hInstance,
 	    samplerDesc.MinLOD = 0;
 	    samplerDesc.MaxLOD = D3D11_FLOAT32_MAX;
 
+	    
 	    hr = d3dDevice->CreateSamplerState(&samplerDesc, &textureSamplerState);
+
+	    D3D11_SAMPLER_DESC uiSamplerDesc = {};
+	    uiSamplerDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+	    uiSamplerDesc.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
+	    uiSamplerDesc.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
+	    uiSamplerDesc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
+
+	    hr = d3dDevice->CreateSamplerState(&uiSamplerDesc, &uiTextureSamplerState);
+
+
 	    
 	    RAWINPUTDEVICE rid[1];
 	    rid[0].usUsagePage = 0x01;
@@ -950,7 +946,6 @@ int CALLBACK WinMain(HINSTANCE hInstance,
 		    //also missed a frame
 		}
 
-		//spin
 
 		
 

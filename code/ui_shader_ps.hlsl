@@ -1,21 +1,27 @@
 Texture2D gTexture : register(t0);
 SamplerState gSampler : register(s0);
 
+struct VS_INPUT
+{
+	float2 pos : POSITION;
+	float2 uv : TEXCOORD;
+};
+
 struct PS_INPUT
 {
 	float4 pos : SV_POSITION;
-	float2 uv : TEXCOORD0;
+	float2 uv : TEXCOORD;
 };
 
-struct PS_OUTPUT
+PS_INPUT VS(VS_INPUT input)
 {
-	float4 sample;		
-};
+	PS_INPUT output;
+	output.pos = float4(input.pos, 0.0f, 1.0f);
+	output.uv = input.uv;
+	return(output);
+}
 
-
-PS_OUTPUT main(PS_INPUT input) : SV_TARGET
+float4 PS(PS_INPUT input) : SV_TARGET
 {
-	PS_OUTPUT result;
-	result.sample = gTexture.Sample(gSampler, input.uv);
-	return(result);
+	return gTexture.Sample(gSampler, input.uv);
 }

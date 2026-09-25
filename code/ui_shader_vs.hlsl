@@ -7,7 +7,7 @@ struct VS_INPUT
 struct VS_OUTPUT
 {
 	float4 pos : SV_POSITION;
-	float2 uv : TEXCOORD0;
+	float2 uv : TEXCOORD;
 };
 
 VS_OUTPUT main(VS_INPUT input)

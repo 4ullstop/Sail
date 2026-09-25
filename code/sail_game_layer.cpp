@@ -634,15 +634,16 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
     texture_load_info testPathLoadInfo = {"../data/textures/cat_tester.bmp", false};
     texture_load_info windModelTexInfo = {"../data/textures/boat_wind_dir_uvs_v2.bmp", false};
     texture_load_info speedometerTexInfo = {"../data/textures/speedometer_uvs.bmp", false};
-    texture_load_info boatTexInfo = {"../data/textures/boat_uv.bmp", false};    
+    texture_load_info boatTexInfo = {"../data/textures/boat_uv.bmp", false};
+    texture_load_info uiTestInfo = {"../data/textures/ui_test.bmp", true};
 
-    texture_load_info allTextureInfo[4] = {testPathLoadInfo, windModelTexInfo, speedometerTexInfo, boatTexInfo};
+    texture_load_info allTextureInfo[5] = {testPathLoadInfo, windModelTexInfo, speedometerTexInfo, boatTexInfo, uiTestInfo};
     
 
     initData->gameTextures = gameFrameworkCode->GameLoadTextures(allTextureInfo,
 								 platformInfo->frameworkArenas.setupArena,
 								 platformInfo->frameworkArenas.perFrameArena,
-								 4,
+								 5,
 								 DEBUGPlatformReadEntireFile,
 								 memoryPoolCode);
     
