@@ -273,13 +273,61 @@ GetDrawBuffersFromSpawnable(win32_spawnable_objs* win32Objs, spawned_obj_info* i
     return(result);
 }
 
+
+internal void
+UIToNDC(ui_update* update, ui_vertex* result)
+{
+
+    
+    v2 topLeft = update->position;
+    v2 topRight = {update->position.x + update->size.x, update->position.y};
+    v2 bottomLeft = {update->position.x, update->position.y + update->size.y};
+    v2 bottomRight = {update->position.x + update->size.x, update->position.y + update->size.y};
+
+    //TopLeft
+    //NDCx
+    result[0].position[0] = ((2 * topLeft.x) / screenWidth) - 1.0f;
+    //NDCy
+    result[0].position[1] = 1.0f - ((2 * topLeft.y) / screenHeight);
+
+    //TopRight
+    //NDCx
+    result[1].position[0] = ((2 * topRight.x) / screenWidth) - 1.0f;
+    //NDCy
+    result[1].position[1] = 1.0f - ((2 * topRight.y) / screenHeight);
+
+    //BottomLeft
+    //NDCx
+    result[2].position[0] = ((2 * bottomLeft.x) / screenWidth) - 1.0f;
+    //NDCy
+    result[2].position[1] = 1.0f - ((2 * bottomLeft.y) / screenHeight);
+
+    //BottomRight
+    //NDCx
+    result[3].position[0] = ((2 * bottomRight.x) / screenWidth) - 1.0f;
+    //NDCy
+    result[3].position[1] = 1.0f - ((2 * bottomRight.y) / screenHeight);
+
+    result[0].uv[0] = 0.0f;
+    result[0].uv[1] = 0.0f;    
+
+    result[1].uv[0] = 1.0f;
+    result[1].uv[1] = 0.0f;    
+
+    result[2].uv[0] = 0.0f;
+    result[2].uv[1] = 1.0f;    
+
+    result[3].uv[0] = 1.0f;
+    result[3].uv[1] = 1.0f;    
+}
+
 internal void
 Render2D(shaders* shader, win32_spawnable_objs* win32Objs)
 {
     for (i32 i = 0; i < win32Objs->numOf2DTextures; i++)
     {
-	texture_buffers_2D* texture = &win32Objs->textureBuffers2D[i];
-	
+	texture_buffers* texture = &win32Objs->textureBuffers[win32Objs->screenSpaceLocations[i]];
+
 	context->OMSetDepthStencilState(disableDepthState, 0);
 	context->OMSetBlendState(alphaBlendState, NULL, 0xFFFFFFFF);
 
@@ -288,19 +336,41 @@ Render2D(shaders* shader, win32_spawnable_objs* win32Objs)
 	context->VSSetShader(shader->uiVertexShader, nullptr, 0);
 	context->IASetInputLayout(shader->uiInputLayout);	
 	context->PSSetShader(shader->uiPixelShader, nullptr, 0);
-	context->PSSetShaderResources(0, 1, &texture->textureInfo->textureResourceView);
+	context->PSSetShaderResources(0, 1, &texture->textureResourceView);
 	context->PSSetSamplers(0, 1, &uiTextureSamplerState);
-
 
 	context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 	
 	UINT stride = sizeof(ui_vertex);
 	UINT offset = 0;
+
+
+	//Perform mapping and unmapping here
+	if (texture->uiInfo->wasUpdated)
+	{
+	    ui_vertex newVerts[4];
+	    UIToNDC(texture->uiInfo, newVerts);
+	    for (i32 j = 0; j < ArrayCount(newVerts); j++)
+	    {
+		for (i32 k = 0; k < ArrayCount(newVerts[j].position); k++)
+		{
+		    texture->uiVertexBufferData[j].position[k] = newVerts[j].position[k];
+		    texture->uiVertexBufferData[j].uv[k] = newVerts[j].uv[k];
+		}
+	    }
+
+	    
+	    context->UpdateSubresource(texture->uiVertexBuffer, 0, nullptr, texture->uiVertexBufferData, 0, 0);
+	    
+	    texture->uiInfo->wasUpdated = false;
+	}
+
 	context->IASetVertexBuffers(0, 1, &texture->uiVertexBuffer, &stride, &offset);
 	context->IASetIndexBuffer(uiIndexBuffer, DXGI_FORMAT_R16_UINT, 0);
-
-	context->DrawIndexed(6, 0, 0);
+	
+	context->DrawIndexed(6, 0, 0);	
     }
+
 
 }
 
@@ -459,6 +529,7 @@ int CALLBACK WinMain(HINSTANCE hInstance,
 	gameFrameworkCode.GameLoadOBJFiles = (game_load_obj_files*)GetProcAddress(gameFrameworkLibrary, "LoadGameOBJFiles");
 	gameFrameworkCode.GameSpawnNewOBJ = (game_spawn_new_obj*)GetProcAddress(gameFrameworkLibrary, "SpawnNewOBJ");
 	gameFrameworkCode.GameLoadTextures = (game_load_textures*)GetProcAddress(gameFrameworkLibrary, "LoadGameTextures");
+	gameFrameworkCode.GameUpdateUITexture = (game_update_ui_texture*)GetProcAddress(gameFrameworkLibrary, "UpdateUITexture");
     }
 
     HMODULE memoryPoolLibrary = LoadLibrary("D:/ExternalCustomAPIs/MemoryPools/dll/memory_pools.dll");

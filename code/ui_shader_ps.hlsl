@@ -13,6 +13,12 @@ struct PS_INPUT
 	float2 uv : TEXCOORD;
 };
 
+cbuffer UITransform : register(b0)
+{
+	float2 pos;
+	float2 uv;
+}
+
 PS_INPUT VS(VS_INPUT input)
 {
 	PS_INPUT output;

@@ -646,6 +646,10 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
 								 5,
 								 DEBUGPlatformReadEntireFile,
 								 memoryPoolCode);
+
+    v2 testSize = {250.0f, 250.0f};
+    v2 testLocation = {50.0f, 50.0f};
+    gameFrameworkCode->GameUpdateUITexture(testSize, testLocation, &initData->gameTextures.textures[tl_ui_test].uiInfo);
     
 #if 0    
     char* filename = "../data/obj/axes.mtl";
