@@ -23,6 +23,9 @@
 global_variable r32 deltaTime;
 global_variable r32 msPerFrame;
 
+#define STARTFREECAM 1
+#define CAMMOVESPEED 50.0f;
+
 internal v3
 FromV4ToV3Rotations(v4 v)
 {
@@ -575,14 +578,14 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
     cameraResult.pitch = 0.0f;
     cameraResult.front = {0.0f, 0.0f, -1.0f, 0.0f};
     cameraResult.position = {-8.2f, 0.04f, 0.77f, 0.0f};
-//    cameraResult.position = {10.0f, 10.f, 10.0f, 10.f};
 
-    cameraResult.movementSpeed = 5.0f;
+
+    cameraResult.movementSpeed = CAMMOVESPEED;
 
     r32 aspectX = platformInfo->aspect.x;
     r32 aspectY = platformInfo->aspect.y;
 	
-//    cameraResult.aspect = {aspectX, aspectY, 0.0f, 0.0f};
+
     cameraResult.aspect.x = aspectX;
     cameraResult.aspect.y = aspectY;
     cameraResult.aspect.z = 0.0f;
@@ -635,38 +638,30 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
     texture_load_info windModelTexInfo = {"../data/textures/boat_wind_dir_uvs_v2.bmp", false};
     texture_load_info speedometerTexInfo = {"../data/textures/speedometer_uvs.bmp", false};
     texture_load_info boatTexInfo = {"../data/textures/boat_uv.bmp", false};
-    texture_load_info uiTestInfo = {"../data/textures/ui_test.bmp", true};
+    texture_load_info uiMap = {"../data/textures/ocean_map.bmp", true};
+    texture_load_info uiBoat = {"../data/textures/boat_map.bmp", true};
 
-    texture_load_info allTextureInfo[5] = {testPathLoadInfo, windModelTexInfo, speedometerTexInfo, boatTexInfo, uiTestInfo};
+    texture_load_info allTextureInfo[6] = {testPathLoadInfo, windModelTexInfo, speedometerTexInfo, boatTexInfo, uiMap, uiBoat};
     
 
     initData->gameTextures = gameFrameworkCode->GameLoadTextures(allTextureInfo,
 								 platformInfo->frameworkArenas.setupArena,
 								 platformInfo->frameworkArenas.perFrameArena,
-								 5,
+								 6,
 								 DEBUGPlatformReadEntireFile,
 								 memoryPoolCode);
 
-    v2 testSize = {250.0f, 250.0f};
+    v2 testSize = {150.0f, 150.0f};
     v2 testLocation = {50.0f, 50.0f};
-    gameFrameworkCode->GameUpdateUITexture(testSize, testLocation, &initData->gameTextures.textures[tl_ui_test].uiInfo);
+    gameFrameworkCode->GameUpdateUITexture(testSize, testLocation, &initData->gameTextures.textures[tl_ui_map - 1].uiInfo);
+
+    v2 boatMapSize = {10.0f, 10.0f};
+    v2 boatMapLocation = {50.0f, 50.0f};
+    gameFrameworkCode->GameUpdateUITexture(boatMapSize, boatMapLocation, &initData->gameTextures.textures[tl_ui_boat - 1].uiInfo);
     
-#if 0    
-    char* filename = "../data/obj/axes.mtl";
-    ParseMTLData(filename,
-		 platformInfo->frameworkArenas.perFrameArena,
-		 platformInfo->frameworkArenas.setupArena,
-		 pgMem,
-		 memoryPoolCode);
-#endif
+
     v4 spawnObjLoc = v4{0.0f, 0.0f, 10.0f, 1.0f};
     v4 oneScale = {1.0f, 1.0f, 1.0f, 1.0f};
-#if 0
-    gameFrameworkCode->GameSpawnNewOBJ(spawnable_obj_type::sot_ico,
-				       spawnObjLoc,
-				       &initData->gameObjs,
-				       memoryPoolCode);
-#else
 
     v4 axesRot = {1.0f, 0.0f, 0.0f, 0.0f};
     
@@ -683,7 +678,7 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
 				       Identity());
     
     transform oceanTransform = {};
-    oceanTransform.location = {0.0f, -1.0f, 0.0f, 0.f};
+    oceanTransform.location = {0.0f, -5.0f, 0.0f, 0.f};
     oceanTransform.rotation = QuaternionIdentity();
     oceanTransform.scale = oneScale;
 
@@ -804,7 +799,6 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
     initData->boat.windCardinal->textureInfo = tl_wind_model;
     
 
-//    v4 mastLocation = {0.65f, -0.7f, 0.0f, 1.0f};
     v4 mastLocation = {0.0f, 0.0f, -1.0f, 1.0f};
     initData->boat.sailInfo = {};    
     initData->boat.sailInfo.mainSail.locationOffset = mastLocation;
@@ -897,11 +891,9 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
     initData->boat.speedOmeter.minRoll = 90.0f;
     initData->boat.speedOmeter.maxRoll = -90.0f;
 //BOAT
-#if 0    
-    v4 camOffset = {-4.2f, 0.04f, 0.77f, 0.0f};
-#else
+
     v4 camOffset = {0.0f, 1.0f, 3.0f, 0.0f};    
-#endif    
+
     
     initData->boat.lerpTimeSpeed = 1.f;
     initData->boat.currRot =
@@ -950,7 +942,9 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
     initData->boat.waveInfo.properties = CreateDefaultOceanProperties();
     initData->boat.waveInfo.waveMinMaxProperties = MinMaxWaveProperties();
     CalculateCameraLocation(&cameraResult, &initData->boat);
-#endif    
+
+    initData->isFreeCam = STARTFREECAM;
+    
     return(cameraResult);
 }
 
@@ -1266,7 +1260,7 @@ UpdateJoystickInformation(joystick_rotation* oldRotation, r32 x, r32 y, bool32 w
     if (diff > 180.0f) diff -= 360.0f;
     if (diff < -180.0f) diff += 360.0f;
 
-//    r32 epsilon = 0.001f;
+
     r32 minAngSpeed = 1.0f;
     if (diff < -minAngSpeed)
     {
@@ -1422,6 +1416,7 @@ extern "C" SAIL_UPDATE(SailUpdate)
 	}
 	if (initData->isFreeCam)
 	{
+
 	    r32 camVelocity = camera->movementSpeed * deltaTime;
 	    if (controller->moveForward.endedDown || padController->moveForward.endedDown)
 	    {
@@ -1702,5 +1697,30 @@ extern "C" SAIL_UPDATE(SailUpdate)
     LerpUpdateRotationsYaw(&boat->sailInfo.windRotation);
     boat->sailInfo.windDirection = boat->sailInfo.windRotation.vCurrent;
 
+    //Update our map
+    //Convert world location to screen locations
+    //Convert screen locations to local screen location
+    //MapValue(world, screen)
 
+    ui_update* mapTextureInfo = &initData->gameTextures.textures[tl_ui_map - 1].uiInfo;
+    
+    r32 dX = boat->objInfo->modelTransform.location.x - mapTextureInfo->position.x;
+    r32 dY = boat->objInfo->modelTransform.location.z - mapTextureInfo->position.y;
+
+    r32 scale = 150.0f / 500.0f;
+    
+    r32 offsetX = dX * scale;
+    r32 offsetY = dY * scale;
+
+    r32 xCenter = mapTextureInfo->position.x + (mapTextureInfo->size.x / 2);
+    r32 yCenter = mapTextureInfo->position.y + (mapTextureInfo->size.y / 2);
+    
+    r32 markerX = offsetX + xCenter;
+    r32 markerY = offsetY + yCenter;
+
+    v2 marker = {markerX, markerY};
+    gameFrameworkCode->GameUpdateUITexture(initData->gameTextures.textures[tl_ui_boat - 1].uiInfo.size,
+					   marker,
+					   &initData->gameTextures.textures[tl_ui_boat - 1].uiInfo);
+					   
 }

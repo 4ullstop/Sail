@@ -64,12 +64,50 @@ struct shaders
     ID3D11PixelShader* uiPixelShader;
 
     ID3D11InputLayout* uiInputLayout;
+
+
+    ID3D11VertexShader* oceanVSShader;
+    ID3D11InputLayout* oceanInputLayout;
+    ID3D11PixelShader* oceanPSShader;
+};
+
+struct alignas(16) ocean_sine_constant
+{
+    r32 amp[4];
+    r32 frequency[4];
+    r32 phase[4];
+};
+
+struct global_lighting
+{
+    DirectX::XMVECTOR lightNormal;
+    DirectX::XMVECTOR location;
+};
+
+struct ocean_buffers
+{
+    ID3D11Buffer* vertBuffer;
+    ID3D11Buffer* indexBuffer;
+
+    i32 indexCount;
+    ID3D11Buffer* oceanUpdateBuffer;    
+    ID3D11Buffer* oceanSineConstants;
+
+    ocean_sine_constant oceanSC;
+
+    ID3D11Buffer* oceanLightingBuffer;
 };
 
 struct object_constants
 {
 //    DirectX::XMFLOAT4 worldPos;
     DirectX::XMFLOAT4X4 modelMat;
+};
+
+struct alignas(16) ocean_update 
+{
+    DirectX::XMFLOAT4X4 modelMat;
+    r32 t;
 };
 
 struct material_constants
@@ -81,6 +119,7 @@ struct sail_constant_buffers
 {
     ID3D11Buffer* dynamicVBuffer;
     ID3D11Buffer* dynamicPBuffer;
+
 };
 
 #define SAIL_WIN32_H

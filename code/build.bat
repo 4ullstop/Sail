@@ -3,7 +3,7 @@
 IF NOT EXIST ..\build mkdir ..\build
 pushd ..\build
 
-set commonCompilerFlags=-nologo -Gm- -GR- -EHa- -Oi -WX -W4 -wd4201 -wd4100 -wd4101 -wd4189 -wd4505 -DTEST_INTERNAL=1 -DTEST_SLOW=1 -DTEST_WIN32=1 -DUSE_FORTY_MATH_FAST=1 -FC -Zi
+set commonCompilerFlags=-nologo -Gm- -GR- -EHa- -Oi -WX -W4 -wd4201 -wd4100 -wd4101 -wd4189 -wd4505 -wd4324 -DTEST_INTERNAL=1 -DTEST_SLOW=1 -DTEST_WIN32=1 -DUSE_FORTY_MATH_FAST=1 -FC -Zi
 
 set commonLinkerFlags=-incremental:no user32.lib gdi32.lib winmm.lib d3d11.lib dxgi.lib D3DCompiler.lib /LIBPATH:"D:\ExternalCustomAPIs\MemoryPools\dll" memory_pools.lib
 
@@ -15,6 +15,9 @@ REM start "C:\Program Files (x86)\Windows Kits\10\bin\10.0.18362.0\x64\fxc.exe" 
 
 fxc.exe -nologo /Od /Zi /T vs_5_0 /Fo vs.cso "S:\code\vs.hlsl"
 fxc.exe -nologo /Od /Zi /T ps_5_0 /Fo ps.cso "S:\code\ps.hlsl"
+
+fxc.exe -nologo /Od /Zi /T vs_5_0 /Fo ocean_vs.cso "S:\code\ocean_vs.hlsl"
+fxc.exe -nologo /Od /Zi /T ps_5_0 /Fo ocean_ps.cso "S:\code\ocean_ps.hlsl"
 
 fxc.exe -nologo /Od /Zi /T vs_5_0 /E VS /Fo ui_vs.cso "S:\code\ui_shader_ps.hlsl"
 fxc.exe -nologo /Od /Zi /T ps_5_0 /E PS /Fo ui_ps.cso "S:\code\ui_shader_ps.hlsl"
