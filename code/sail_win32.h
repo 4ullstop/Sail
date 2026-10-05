@@ -69,6 +69,10 @@ struct shaders
     ID3D11VertexShader* oceanVSShader;
     ID3D11InputLayout* oceanInputLayout;
     ID3D11PixelShader* oceanPSShader;
+
+    ID3D11VertexShader* ppVS;
+    ID3D11InputLayout* ppIALayout;
+    ID3D11PixelShader* ppPS;
 };
 
 struct alignas(16) ocean_sine_constant

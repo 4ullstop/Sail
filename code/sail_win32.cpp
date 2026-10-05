@@ -32,6 +32,14 @@ global_variable ID3D11DepthStencilView* depthStencilView;
 global_variable ID3D11Texture2D* depthStencil;
 global_variable D3D11_TEXTURE2D_DESC bbDesc;
 
+global_variable ID3D11Texture2D* postProcessTexture;
+global_variable ID3D11ShaderResourceView* postProcessSRV;
+global_variable ID3D11Texture2D* postProcessDepthStencil;
+global_variable ID3D11DepthStencilView* postProcessDepthStencilView;
+global_variable ID3D11RenderTargetView* postProcessRTV;
+global_variable ID3D11SamplerState* postProcessSamplerState;
+
+
 global_variable ID3D11SamplerState* textureSamplerState;
 global_variable ID3D11SamplerState* uiTextureSamplerState;
 
@@ -515,8 +523,37 @@ CreateShaders(shaders* gameShaders)
 				      oceanPSResult.contentsSize,
 				      nullptr,
 				      &gameShaders->oceanPSShader);
-	
 
+    debug_read_file_result ppVSResult = DEBUGPlatformReadEntireFile(&blankThread, "../build/pp_vs.cso");
+    bytes = (BYTE*)ppVSResult.contents;
+    hr = d3dDevice->CreateVertexShader(ppVSResult.contents,
+				       ppVSResult.contentsSize,
+				       nullptr,
+				       &gameShaders->ppVS);
+    D3D11_INPUT_ELEMENT_DESC ppDesc[] =
+    {
+	{
+	    "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT,
+	    0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0
+	},
+	{
+	    "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,
+	    0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0
+	},
+    };
+
+    hr = d3dDevice->CreateInputLayout(ppDesc,
+				      ArrayCount(ppDesc),
+				      bytes,
+				      ppVSResult.contentsSize,
+				      &gameShaders->ppIALayout);
+
+    debug_read_file_result ppPSResult = DEBUGPlatformReadEntireFile(&blankThread, "../build/pp_ps.cso");
+    bytes = (BYTE*)ppPSResult.contents;
+    hr = d3dDevice->CreatePixelShader(ppPSResult.contents,
+				      ppPSResult.contentsSize,
+				      nullptr,
+				      &gameShaders->ppPS);
 }
 
 internal draw_buffers*
@@ -675,7 +712,7 @@ Render(game_loaded_objs* gameObjs, win32_spawnable_objs* win32Objs, sail_constan
     r32 teal[] = {0.098f, 0.439f, 1.000f};
 
     context->UpdateSubresource(shader->vsConstantBuffer, 0, nullptr, &dxCam->constantBufferData, 0, 0);
-
+#if 0
     context->ClearRenderTargetView(renderTargetView,
 				   teal);
 
@@ -684,12 +721,19 @@ Render(game_loaded_objs* gameObjs, win32_spawnable_objs* win32Objs, sail_constan
 				   1.0f,
 				   0);
 
-    context->OMSetDepthStencilState(nullptr, 0);
-    context->OMSetBlendState(nullptr, NULL, 0xFFFFFFFF);
-    
     context->OMSetRenderTargets(1,
 				&renderTargetView,
 				depthStencilView);
+#else
+    context->OMSetRenderTargets(1, &postProcessRTV, depthStencilView);
+    context->ClearRenderTargetView(postProcessRTV, teal);
+    context->ClearDepthStencilView(depthStencilView, D3D11_CLEAR_DEPTH, 1.0f, 0);
+
+#endif    
+    
+    context->OMSetDepthStencilState(nullptr, 0);
+    context->OMSetBlendState(nullptr, NULL, 0xFFFFFFFF);
+
 
     context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     context->IASetInputLayout(shader->vertexInputLayout);
@@ -786,7 +830,33 @@ Render(game_loaded_objs* gameObjs, win32_spawnable_objs* win32Objs, sail_constan
 
     RenderOcean(oceanGrid, oceanBuffers, shader, cBuffers);
 
+#if 1
+    //Set up our 3D for post processing 
+    ID3D11RenderTargetView* nullRTV[] = {nullptr};
+    context->OMSetRenderTargets(1, nullRTV, nullptr);
+
+    context->OMSetRenderTargets(1, &renderTargetView, nullptr);
+
+    context->VSSetShader(shader->ppVS, nullptr, 0);
+    context->PSSetShader(shader->ppPS, nullptr, 0);
+
+    context->PSSetShaderResources(0, 1, &postProcessSRV);
+    context->PSSetSamplers(0, 1, &postProcessSamplerState);
+
+    context->IASetInputLayout(nullptr);
+    context->IASetVertexBuffers(0, 0, nullptr, nullptr, nullptr);
+    context->IASetIndexBuffer(nullptr, DXGI_FORMAT_UNKNOWN, 0);
+    context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+    context->Draw(3, 0);
+
+
+    context->PSSetShaderResources(0, 1, &nullSRV);
+#endif    
+
     
+    
+    //Finally render 2d
     Render2D(shader, win32Objs);
 }
 
@@ -1077,9 +1147,32 @@ int CALLBACK WinMain(HINSTANCE hInstance,
 	    hr = swapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), (void**)&backBuffer);
 	    hr = d3dDevice->CreateRenderTargetView(backBuffer, nullptr, &renderTargetView);
 
+
 	    backBuffer->GetDesc(&bbDesc);
+	    
+	    //Post process render target information
+	    D3D11_TEXTURE2D_DESC ppDesc = {};
+	    ppDesc.Width = (UINT)screenWidth;
+	    ppDesc.Height = (UINT)screenHeight;
+	    ppDesc.MipLevels = 1;
+	    ppDesc.Format = DXGI_FORMAT_R16G16B16A16_UNORM;
+	    ppDesc.SampleDesc.Count = 1;
+	    ppDesc.SampleDesc.Quality = 0;
+	    ppDesc.Usage = D3D11_USAGE_DEFAULT;
+	    ppDesc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
+	    ppDesc.CPUAccessFlags = 0;
+	    ppDesc.MiscFlags = 0;
+	    ppDesc.ArraySize = 1;
 
+	    D3D11_SHADER_RESOURCE_VIEW_DESC ppSrvDesc = {};
+	    ppSrvDesc.Format = ppDesc.Format;
+	    ppSrvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D; //this may not be right;
+	    ppSrvDesc.Texture2D.MostDetailedMip = 0;
+	    ppSrvDesc.Texture2D.MipLevels = 1;
 
+	    d3dDevice->CreateTexture2D(&ppDesc, nullptr, &postProcessTexture);
+	    hr = d3dDevice->CreateRenderTargetView(postProcessTexture, nullptr, &postProcessRTV);
+	    d3dDevice->CreateShaderResourceView(postProcessTexture, &ppSrvDesc, &postProcessSRV);	    
 //3d	    
 	    CD3D11_TEXTURE2D_DESC depthStencilDesc(
 		DXGI_FORMAT_D24_UNORM_S8_UINT,
@@ -1098,6 +1191,35 @@ int CALLBACK WinMain(HINSTANCE hInstance,
 						   &depthStencilViewDesc,
 						   &depthStencilView);
 
+	    CD3D11_TEXTURE2D_DESC ppDepthStencilDesc(
+		DXGI_FORMAT_D24_UNORM_S8_UINT,
+		(UINT)bbDesc.Width,
+		(UINT)bbDesc.Height,
+		1,
+		1,
+		D3D11_BIND_DEPTH_STENCIL);
+	    
+	    CD3D11_DEPTH_STENCIL_VIEW_DESC ppDepthStencilViewDesc(D3D11_DSV_DIMENSION_TEXTURE2D);
+	    
+	    hr = d3dDevice->CreateTexture2D(&ppDepthStencilDesc,
+					    nullptr,
+					    &postProcessDepthStencil);
+
+	    hr = d3dDevice->CreateDepthStencilView(postProcessDepthStencil,
+						   &ppDepthStencilViewDesc,
+						   &postProcessDepthStencilView);
+					    
+	    D3D11_SAMPLER_DESC ppSampDesc = {};
+	    ppSampDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+	    ppSampDesc.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
+	    ppSampDesc.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
+	    ppSampDesc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
+	    ppSampDesc.ComparisonFunc = D3D11_COMPARISON_NEVER;
+	    ppSampDesc.MinLOD = 0;
+	    ppSampDesc.MaxLOD = D3D11_FLOAT32_MAX;
+
+	    d3dDevice->CreateSamplerState(&ppSampDesc, &postProcessSamplerState);
+								  
 
 //2d
 
