@@ -640,14 +640,16 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
     texture_load_info boatTexInfo = {"../data/textures/boat_uv.bmp", false};
     texture_load_info uiMap = {"../data/textures/ocean_map.bmp", true};
     texture_load_info uiBoat = {"../data/textures/boat_map.bmp", true};
-
-    texture_load_info allTextureInfo[6] = {testPathLoadInfo, windModelTexInfo, speedometerTexInfo, boatTexInfo, uiMap, uiBoat};
+    texture_load_info leftSailTut = {"../data/textures/left_sail_tutorial.bmp", true};
+    texture_load_info rightSailTut = {"../data/textures/right_sail_tutorial.bmp", true};
+    
+    texture_load_info allTextureInfo[8] = {testPathLoadInfo, windModelTexInfo, speedometerTexInfo, boatTexInfo, uiMap, uiBoat, leftSailTut, rightSailTut};
     
 
     initData->gameTextures = gameFrameworkCode->GameLoadTextures(allTextureInfo,
 								 platformInfo->frameworkArenas.setupArena,
 								 platformInfo->frameworkArenas.perFrameArena,
-								 6,
+								 8,
 								 DEBUGPlatformReadEntireFile,
 								 memoryPoolCode);
 
@@ -658,7 +660,19 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
     v2 boatMapSize = {10.0f, 10.0f};
     v2 boatMapLocation = {50.0f, 50.0f};
     gameFrameworkCode->GameUpdateUITexture(boatMapSize, boatMapLocation, &initData->gameTextures.textures[tl_ui_boat - 1].uiInfo);
-    
+
+
+    v2 tutSize = {144.0f, 135.0f};
+    v2 leftTutLoc = {150.0f, -150.0f};
+    v2 rightTutLoc = {};
+    gameFrameworkCode->GameUpdateUITexture(tutSize,
+					   leftTutLoc,
+					   &initData->gameTextures.textures[tl_ui_left_tut - 1].uiInfo);
+    initData->gameTextures.textures[tl_ui_left_tut - 1].uiInfo.hidden = true;
+    gameFrameworkCode->GameUpdateUITexture(tutSize,
+					   rightTutLoc,
+					   &initData->gameTextures.textures[tl_ui_right_tut - 1].uiInfo);
+    initData->gameTextures.textures[tl_ui_right_tut - 1].uiInfo.hidden = true;    
 
     v4 spawnObjLoc = v4{0.0f, 0.0f, 10.0f, 1.0f};
     v4 oneScale = {1.0f, 1.0f, 1.0f, 1.0f};

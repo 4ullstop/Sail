@@ -145,8 +145,8 @@ CreateOceanBuffers(ocean* oceanGrid)
 
     for (i32 i = 0; i < 4; i++)
     {
-	buffers.oceanSC.amp[i] = RandomFloatInRange(0.0f, 0.4f);
-	r32 randWaveLen = RandomFloatInRange(1.0f, 8.0f);
+	buffers.oceanSC.amp[i] = RandomFloatInRange(0.2f, 0.6f);
+	r32 randWaveLen = RandomFloatInRange(1.0f, 12.0f);
 	buffers.oceanSC.frequency[i] = 2 / randWaveLen;
 	r32 randSpeed = RandomFloatInRange(1.0f, 3.0f);
 	buffers.oceanSC.phase[i] = (randSpeed * (2 / randWaveLen));
@@ -168,8 +168,8 @@ CreateOceanBuffers(ocean* oceanGrid)
     lightDesc.CPUAccessFlags = 0;
 
     global_lighting sun = {};
-    sun.lightNormal = DirectX::XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
-    sun.location = DirectX::XMVectorSet(0.0f, 10.0f, 0.0f, 0.0f);
+    sun.lightNormal = DirectX::XMVectorSet(0.0f, -1.0f, 0.0f, 0.0f);
+    sun.location = DirectX::XMVectorSet(0.0f, 5.0f, 1.0f, 0.0f);
 
     D3D11_SUBRESOURCE_DATA sunData;
     ZeroMemory(&sunData, sizeof(D3D11_SUBRESOURCE_DATA));
@@ -332,7 +332,7 @@ DXUpdateCam(dx_camera* camera)
 		camera->up)
 	    )
 	);
-    
+    camera->constantBufferData.cameraPosition = camera->position;
 }
 
 LRESULT CALLBACK Win32MainWindowProc(HWND hwnd,
@@ -568,49 +568,52 @@ Render2D(shaders* shader, win32_spawnable_objs* win32Objs)
 {
     for (i32 i = 0; i < win32Objs->numOf2DTextures; i++)
     {
+	
 	texture_buffers* texture = &win32Objs->textureBuffers[win32Objs->screenSpaceLocations[i]];
 
-	context->OMSetDepthStencilState(disableDepthState, 0);
-	context->OMSetBlendState(alphaBlendState, NULL, 0xFFFFFFFF);
-
-	context->VSSetShader(shader->uiVertexShader, nullptr, 0);
-	context->IASetInputLayout(shader->uiInputLayout);	
-	context->PSSetShader(shader->uiPixelShader, nullptr, 0);
-	context->PSSetShaderResources(0, 1, &texture->textureResourceView);
-	context->PSSetSamplers(0, 1, &uiTextureSamplerState);
-
-	context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-	
-	UINT stride = sizeof(ui_vertex);
-	UINT offset = 0;
-
-
-	//Perform mapping and unmapping here
-	if (texture->uiInfo->wasUpdated)
+	if (texture->uiInfo->hidden == false)
 	{
-	    ui_vertex newVerts[4];
-	    UIToNDC(texture->uiInfo, newVerts);
-	    for (i32 j = 0; j < ArrayCount(newVerts); j++)
+	    context->OMSetDepthStencilState(disableDepthState, 0);
+	    context->OMSetBlendState(alphaBlendState, NULL, 0xFFFFFFFF);
+
+	    context->VSSetShader(shader->uiVertexShader, nullptr, 0);
+	    context->IASetInputLayout(shader->uiInputLayout);	
+	    context->PSSetShader(shader->uiPixelShader, nullptr, 0);
+	    context->PSSetShaderResources(0, 1, &texture->textureResourceView);
+	    context->PSSetSamplers(0, 1, &uiTextureSamplerState);
+
+	    context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	
+	    UINT stride = sizeof(ui_vertex);
+	    UINT offset = 0;
+
+
+	    //Perform mapping and unmapping here
+	    if (texture->uiInfo->wasUpdated)
 	    {
-		for (i32 k = 0; k < ArrayCount(newVerts[j].position); k++)
+		ui_vertex newVerts[4];
+		UIToNDC(texture->uiInfo, newVerts);
+		for (i32 j = 0; j < ArrayCount(newVerts); j++)
 		{
-		    texture->uiVertexBufferData[j].position[k] = newVerts[j].position[k];
-		    texture->uiVertexBufferData[j].uv[k] = newVerts[j].uv[k];
+		    for (i32 k = 0; k < ArrayCount(newVerts[j].position); k++)
+		    {
+			texture->uiVertexBufferData[j].position[k] = newVerts[j].position[k];
+			texture->uiVertexBufferData[j].uv[k] = newVerts[j].uv[k];
+		    }
 		}
+
+	    
+		context->UpdateSubresource(texture->uiVertexBuffer, 0, nullptr, texture->uiVertexBufferData, 0, 0);
+	    
+		texture->uiInfo->wasUpdated = false;
 	    }
 
-	    
-	    context->UpdateSubresource(texture->uiVertexBuffer, 0, nullptr, texture->uiVertexBufferData, 0, 0);
-	    
-	    texture->uiInfo->wasUpdated = false;
-	}
-
-	context->IASetVertexBuffers(0, 1, &texture->uiVertexBuffer, &stride, &offset);
-	context->IASetIndexBuffer(uiIndexBuffer, DXGI_FORMAT_R16_UINT, 0);
+	    context->IASetVertexBuffers(0, 1, &texture->uiVertexBuffer, &stride, &offset);
+	    context->IASetIndexBuffer(uiIndexBuffer, DXGI_FORMAT_R16_UINT, 0);
 	
-	context->DrawIndexed(6, 0, 0);	
+	    context->DrawIndexed(6, 0, 0);	
+	}
     }
-
 
 }
 
@@ -1281,6 +1284,7 @@ int CALLBACK WinMain(HINSTANCE hInstance,
 		gCamData.world = gameCamera.world;
 		gCamData.view = gameCamera.view;
 		gCamData.projection = gameCamera.projection;
+		gCamData.position = gameCamera.position;
 		
 		win32Code.Win32ConvertGameCameraToWin32(&dxCam, &gCamData);
 

@@ -4,7 +4,7 @@ struct PS_INPUT
 	float4 color : COLOR0;
 	float2 tex : TEXCOORD0;
 	float4 normal : NORMAL0;
-	float4 viewForward : NORMAL1;
+	float4 cameraPosition : NORMAL1;
 };
 
 struct PS_OUTPUT
@@ -23,15 +23,32 @@ PS_OUTPUT main(PS_INPUT In)
 	PS_OUTPUT output;
 
 	float3 N = normalize(In.normal.xyz);
-	float3 L = normalize(sunNormal.xyz);
+	float3 L = normalize(-sunNormal.xyz);
 
 	float nDotL = saturate(dot(N, L));
+	float3 sunColor = float3(0.8f, 0.8f, 0.8f);
+	float3 diffuse = In.color.rgb * nDotL * sunColor;
+	float3 V = normalize(In.cameraPosition.xyz - In.position.xyz);	
 
-	float3 V = normalize(In.viewForward.xyz);
+#if 1
+
 	float3 H = normalize(V + L);
-	float specExp = 0.5f;
-	float specular = pow(saturate(dot(H, N)), specExp);
+	float nDotH = saturate(dot(N, H));
+	
+	float specExp = 5.0f;
+	float3 sunSpecColor = float3(0.8f, 0.8f, 0.8f);
+	float3 specular = pow(nDotH, specExp) * sunSpecColor;
+	specular *= (nDotL > 0.0f ? 1.0f : 0.0f);
 
-	output.RGBColor = float4(In.color.rgb * specular * nDotL, In.color.a);
+//	output.RGBColor = float4(In.color.rgb * nDotL + specular, In.color.a);
+	float3 ambient = In.color.rgb * 0.1f;
+	output.RGBColor = float4(ambient + diffuse + specular, In.color.a);
+
+#else
+	float3 H = normalize(V + L);
+	float specExp = 10.0f;
+	float specular = pow(saturate(dot(N, H)), specExp);
+	output.RGBColor = float4(In.color.rgb * nDotL + specular, In.color.a);
+#endif
 	return(output);
 }

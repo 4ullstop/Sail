@@ -12,7 +12,7 @@ struct VS_OUTPUT
 	float4 color : COLOR0;
 	float2 texCoord : TEXCOORD;
 	float4 normal : NORMAL0;
-	float4 viewForward : NORMAL1;
+	float4 cameraPosition : NORMAL1;
 };
 
 cbuffer ModelViewProjectionConstantBuffer : register(b0)
@@ -20,6 +20,7 @@ cbuffer ModelViewProjectionConstantBuffer : register(b0)
 	matrix mWorld;
 	matrix view;
 	matrix projection;
+	float4 cameraPosition;
 }
 
 cbuffer UpdateBuffer : register(b1)
@@ -55,14 +56,22 @@ VS_OUTPUT main(VS_INPUT input)
 	for (int i = 0; i < 4; i++)
 	{
 		float2 d = waveDirections[i];
+		float e = 2.71828182;
 		float dotPos = dot(d, pos.xz);
 		float phaseAngle = dotPos * frequency[i] + t * phase[i];
 
-		totalY += amp[i] * sin(phaseAngle);
+//		totalY += pow(2.71828182, ((amp[i] * sin(phaseAngle)) - 1.5));
+
+		totalY += amp[i] * pow(e, sin(phaseAngle) - 1);
 
 		float cosVal = cos(phaseAngle);
+#if 0
 		dYdx += amp[i] * frequency[i] * d.x * cosVal;
 		dYdz += amp[i] * frequency[i] * d.y * cosVal;
+#else
+		dYdx += frequency[i] * d.x * pow(e, ((amp[i] * cosVal) - 1.0f));
+		dYdz += frequency[i] * d.y * pow(e, ((amp[i] * cosVal) - 1.0f));		
+#endif
 	}
 
 	pos.y += totalY;
@@ -82,7 +91,7 @@ VS_OUTPUT main(VS_INPUT input)
 	output.color = float4(input.vColor, 1.0f);
 	output.texCoord = input.texCoord;
 	output.normal = float4(worldNormal, 0.0f);
-	output.viewForward = float4(view[3][0], view[3][1], view[3][2], 0.0f);
+	output.cameraPosition = cameraPosition;
 
 	return(output);
 }
