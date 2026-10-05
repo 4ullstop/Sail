@@ -28,6 +28,7 @@ struct game_state
     r32 msPerFrame;
     u8 weatherLevel;
     u8 newWeatherLevel;
+    spawned_obj_info* skybox;
 };
 
 enum sail_orientation
@@ -288,6 +289,8 @@ struct sail_initialize_data
 
     joystick_rotation newJoystick;
     joystick_rotation oldJoystick;
+
+    spawned_obj_info* skybox;
 };
 
 struct platform_info

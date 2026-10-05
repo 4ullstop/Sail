@@ -35,7 +35,7 @@ PS_OUTPUT main(PS_INPUT In)
 	float3 H = normalize(V + L);
 	float nDotH = saturate(dot(N, H));
 	
-	float specExp = 5.0f;
+	float specExp = 10.0f;
 	float3 sunSpecColor = float3(0.8f, 0.8f, 0.8f);
 	float3 specular = pow(nDotH, specExp) * sunSpecColor;
 	specular *= (nDotL > 0.0f ? 1.0f : 0.0f);

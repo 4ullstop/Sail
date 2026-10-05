@@ -31,18 +31,11 @@ cbuffer UpdateBuffer : register(b1)
 
 cbuffer ConstantSineWaves : register(b2)
 {
-	float4 amp;
-	float4 frequency;
-	float4 phase;
+	float4x4 amp;
+	float4x4 frequency;
+	float4x4 phase;
+	float4x4 directions;
 }
-
-static const float2 waveDirections[4] =
-{
-	float2(1.0f, 0.0f),
-	float2(0.707f, 0.707f),
-	float2(0.5f, 1.0f),
-	float2(-0.6f, 0.8f)		     
-};
 	
 VS_OUTPUT main(VS_INPUT input)
 {
@@ -55,23 +48,27 @@ VS_OUTPUT main(VS_INPUT input)
 
 	for (int i = 0; i < 4; i++)
 	{
-		float2 d = waveDirections[i];
-		float e = 2.71828182;
-		float dotPos = dot(d, pos.xz);
-		float phaseAngle = dotPos * frequency[i] + t * phase[i];
+		for (int j = 0; j < 4; j++)
+		{
+			float2 d = float2(directions[i][j] + dYdx, directions[j][i] + dYdz);
+			d = normalize(d);
+			float e = 2.71828182;
+			float dotPos = dot(d, pos.xz);
+			float phaseAngle = dotPos * frequency[i][j] + t * phase[i][j];
 
-//		totalY += pow(2.71828182, ((amp[i] * sin(phaseAngle)) - 1.5));
+//			totalY += pow(2.71828182, ((amp[i][j] * sin(phaseAngle)) - 1.5));
 
-		totalY += amp[i] * pow(e, sin(phaseAngle) - 1);
+			totalY += amp[i][j] * pow(e, sin(phaseAngle) - 1);
 
-		float cosVal = cos(phaseAngle);
+			float cosVal = cos(phaseAngle);
 #if 0
-		dYdx += amp[i] * frequency[i] * d.x * cosVal;
-		dYdz += amp[i] * frequency[i] * d.y * cosVal;
+			dYdx += amp[i][j] * frequency[i][j] * d.x * cosVal;
+			dYdz += amp[i][j] * frequency[i][j] * d.y * cosVal;
 #else
-		dYdx += frequency[i] * d.x * pow(e, ((amp[i] * cosVal) - 1.0f));
-		dYdz += frequency[i] * d.y * pow(e, ((amp[i] * cosVal) - 1.0f));		
+			dYdx += frequency[i][j] * d.x * pow(e, ((amp[i][j] * cosVal) - 1.0f));
+			dYdz += frequency[i][j] * d.y * pow(e, ((amp[i][j] * cosVal) - 1.0f));		
 #endif
+		}
 	}
 
 	pos.y += totalY;

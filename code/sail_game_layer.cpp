@@ -624,13 +624,14 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
     char* marooned = "../data/obj/marooned_V1.obj";
     char* winch = "../data/obj/winch.obj";
     char* speedometerBottom = "../data/obj/speedometer_bottom_v1.obj";
-    char* speedometerTop = "../data/obj/speedometer_top_v1.obj";    
-    char* paths[512] = {boatPath, mastPath, refCubePath, windSockPath, axesPath, arrowPath, texTestPath, oceanPath, windDirModelBottom, windDirModelTop, marooned, windDirCardinal, winch, speedometerBottom, speedometerTop};
+    char* speedometerTop = "../data/obj/speedometer_top_v1.obj";
+    char* skybox = "../data/obj/skybox.obj";
+    char* paths[512] = {boatPath, mastPath, refCubePath, windSockPath, axesPath, arrowPath, texTestPath, oceanPath, windDirModelBottom, windDirModelTop, marooned, windDirCardinal, winch, speedometerBottom, speedometerTop, skybox};
 
     
     initData->gameObjs = gameFrameworkCode->GameLoadOBJFiles(platformInfo->parseObjCode,
 							     &platformInfo->frameworkArenas,
-							     pgMem, memoryPoolCode, paths, 15);
+							     pgMem, memoryPoolCode, paths, 16);
 
     initData->isFreeCam = false;
 
@@ -642,14 +643,15 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
     texture_load_info uiBoat = {"../data/textures/boat_map.bmp", true};
     texture_load_info leftSailTut = {"../data/textures/left_sail_tutorial.bmp", true};
     texture_load_info rightSailTut = {"../data/textures/right_sail_tutorial.bmp", true};
+    texture_load_info skyboxCubemap = {"../data/textures/skybox_cubemap.bmp", false};
     
-    texture_load_info allTextureInfo[8] = {testPathLoadInfo, windModelTexInfo, speedometerTexInfo, boatTexInfo, uiMap, uiBoat, leftSailTut, rightSailTut};
+    texture_load_info allTextureInfo[9] = {testPathLoadInfo, windModelTexInfo, speedometerTexInfo, boatTexInfo, uiMap, uiBoat, leftSailTut, rightSailTut, skyboxCubemap};
     
 
     initData->gameTextures = gameFrameworkCode->GameLoadTextures(allTextureInfo,
 								 platformInfo->frameworkArenas.setupArena,
 								 platformInfo->frameworkArenas.perFrameArena,
-								 8,
+								 9,
 								 DEBUGPlatformReadEntireFile,
 								 memoryPoolCode);
 
@@ -678,6 +680,18 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
     v4 oneScale = {1.0f, 1.0f, 1.0f, 1.0f};
 
     v4 axesRot = {1.0f, 0.0f, 0.0f, 0.0f};
+
+    transform skyboxTransform = {};
+    skyboxTransform.location = {0.0f, 0.0f, 0.0f};
+    skyboxTransform.rotation = QuaternionIdentity();
+    skyboxTransform.scale = oneScale;
+    initData->skybox = gameFrameworkCode->GameSpawnNewOBJ(sot_skybox,
+							  skyboxTransform,
+							  &initData->gameObjs,
+							  memoryPoolCode,
+							  false,
+							  Identity());
+    initData->skybox->textureInfo = tl_skybox;
     
     transform maroonedTransform = {};
     maroonedTransform.location = {0.0f, 0.0f, -50.0f};

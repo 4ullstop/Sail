@@ -73,9 +73,10 @@ struct shaders
 
 struct alignas(16) ocean_sine_constant
 {
-    r32 amp[4];
-    r32 frequency[4];
-    r32 phase[4];
+    r32 amp[4][4];
+    r32 frequency[4][4];
+    r32 phase[4][4];
+    r32 directions[4][4];
 };
 
 struct global_lighting

@@ -143,13 +143,23 @@ CreateOceanBuffers(ocean* oceanGrid)
     cbDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
     cbDesc.CPUAccessFlags = 0;
 
+    r32 amp = 1.0f;
+    r32 waveLen = 1.0f;
     for (i32 i = 0; i < 4; i++)
     {
-	buffers.oceanSC.amp[i] = RandomFloatInRange(0.2f, 0.6f);
-	r32 randWaveLen = RandomFloatInRange(1.0f, 12.0f);
-	buffers.oceanSC.frequency[i] = 2 / randWaveLen;
-	r32 randSpeed = RandomFloatInRange(1.0f, 3.0f);
-	buffers.oceanSC.phase[i] = (randSpeed * (2 / randWaveLen));
+	for (i32 j = 0; j < 4; j++)
+	{
+	    r32 ampDec = 0.6f;
+	    r32 waveLenInc = 1.18f;
+	    amp *= ampDec;
+	    buffers.oceanSC.amp[i][j] = amp;
+	    waveLen *= waveLenInc;
+	    buffers.oceanSC.frequency[i][j] = 2 / waveLen;
+	    r32 randSpeed = RandomFloatInRange(0.5f, 1.5f);
+	    buffers.oceanSC.phase[i][j] = (randSpeed * (2 / waveLen));
+	    r32 randDirection = RandomFloatInRange(0.0f, 1.0f);
+	    buffers.oceanSC.directions[i][j] = randDirection;
+	}
     }
 
     D3D11_SUBRESOURCE_DATA sineConstantData;
@@ -223,7 +233,7 @@ CreateOceanGrid(memory_arena* arena)
 	    r32 xPos = -halfWidth + (x * dx);
 	    vertex_position_color v;
 	    v.pos = {xPos, 0.0f, zPos};
-	    v.color = {0.0f, 0.0f, 0.8f};
+	    v.color = {0.2f, 0.2f, 0.8f};
 	    v.texCoord = {(r32)x / oceanGrid.sliceWidth, (r32)z / oceanGrid.sliceLength};
 	    oceanGrid.verts[i++] = v;
 	}
