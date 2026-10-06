@@ -120,11 +120,21 @@ struct material_constants
     DirectX::XMFLOAT4 hasMaterials;
 };
 
+struct alignas(16) fog_constants
+{
+    DirectX::XMVECTOR fogColor;
+    r32 fogStart;
+    r32 fogEnd;
+    r32 nearZ;
+    r32 farZ;
+};
+
 struct sail_constant_buffers
 {
     ID3D11Buffer* dynamicVBuffer;
     ID3D11Buffer* dynamicPBuffer;
 
+    ID3D11Buffer* fogBuffer;
 };
 
 #define SAIL_WIN32_H

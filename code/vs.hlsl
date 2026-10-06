@@ -30,11 +30,16 @@ VS_OUTPUT main(VS_INPUT input)
 	float4 pos = float4(input.vPos, 1.0f);
 
 //	pos = mul(pos, mWorld);
-	
+
+#if 1
 	pos = mul(pos, modelWorld);
 	pos = mul(pos, view);
 	pos = mul(pos, projection);
-
+#else
+	pos = mul(modelWorld, pos);
+	pos = mul(view, pos);
+	pos = mul(projection, pos); 
+#endif
 	output.position = pos;
 	output.color = float4(input.vColor, 1.0f);
 	output.texCoord = input.texCoord;
