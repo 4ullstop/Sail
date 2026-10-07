@@ -842,6 +842,12 @@ Render(game_loaded_objs* gameObjs, win32_spawnable_objs* win32Objs, sail_constan
 #if 1
     //Set up our 3D for post processing 
 
+    post_process_transforms_constants ppTransforms = {};
+    DirectX::XMMATRIX view = DirectX::XMLoadFloat4x4(&dxCam->constantBufferData.view);
+    ppTransforms.invViewProj = DirectX::XMMatrixInverse(NULL, view);
+    ppTransforms.cameraWorldPos = dxCam->position;
+    context->UpdateSubresource(cBuffers->fogTransformsBuffer, 0, nullptr, &ppTransforms, 0, 0);
+    
     context->OMSetRenderTargets(0, nullptr, nullptr);
 
     context->OMSetRenderTargets(1, &renderTargetView, nullptr);
@@ -850,6 +856,7 @@ Render(game_loaded_objs* gameObjs, win32_spawnable_objs* win32Objs, sail_constan
     context->PSSetShader(shader->ppPS, nullptr, 0);
 
     context->PSSetConstantBuffers(0, 1, &cBuffers->fogBuffer);
+    context->PSSetConstantBuffers(1, 1, &cBuffers->fogTransformsBuffer);
     
     ID3D11ShaderResourceView* postProcessSRVs[] = {postProcessSRV, ppDepthSRV};
     context->PSSetShaderResources(0, 2, postProcessSRVs);
@@ -1359,7 +1366,10 @@ int CALLBACK WinMain(HINSTANCE hInstance,
 	    fog.fogEnd = 100.0f;
 	    fog.nearZ = gameCamera.nearZ;
 	    fog.farZ = gameCamera.farZ;
-	    
+	    fog.fogHeightFalloff = 0.05f;
+	    fog.fogBaseHeight = 1.0f;
+	    fog.baseFogDensity = 0.01f;
+
 	    D3D11_SUBRESOURCE_DATA fogData;
 	    ZeroMemory(&fogData, sizeof(D3D11_SUBRESOURCE_DATA));
 	    fogData.pSysMem = &fog;
@@ -1368,6 +1378,23 @@ int CALLBACK WinMain(HINSTANCE hInstance,
 
 	    hr = d3dDevice->CreateBuffer(&fogDesc, &fogData, &sailConstantBuffers.fogBuffer);
 	    
+	    D3D11_BUFFER_DESC transformsDesc = {};
+	    transformsDesc.Usage = D3D11_USAGE_DEFAULT;
+	    transformsDesc.ByteWidth = sizeof(post_process_transforms_constants);
+	    transformsDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+	    transformsDesc.CPUAccessFlags = 0;
+
+	    post_process_transforms_constants ppTransforms = {};
+	    ppTransforms.invViewProj = win32Code.Win32FromM4ToXMMATRIX(gameCamera.viewInv);
+	    ppTransforms.cameraWorldPos = win32Code.Win32FromV4ToXMVECTOR(gameCamera.position);
+	    
+	    D3D11_SUBRESOURCE_DATA transformsData;
+	    ZeroMemory(&transformsData, sizeof(D3D11_SUBRESOURCE_DATA));
+	    transformsData.pSysMem = &ppTransforms;
+	    transformsData.SysMemPitch = 0;
+	    transformsData.SysMemSlicePitch = 0;
+
+	    hr = d3dDevice->CreateBuffer(&transformsDesc, &transformsData, &sailConstantBuffers.fogTransformsBuffer);
 	    
 	    D3D11_SAMPLER_DESC samplerDesc = {};
 	    samplerDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
@@ -1464,6 +1491,7 @@ int CALLBACK WinMain(HINSTANCE hInstance,
 		gCamData.view = gameCamera.view;
 		gCamData.projection = gameCamera.projection;
 		gCamData.position = gameCamera.position;
+		gCamData.invView = gameCamera.viewInv;
 		
 		win32Code.Win32ConvertGameCameraToWin32(&dxCam, &gCamData);
 

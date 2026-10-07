@@ -127,6 +127,15 @@ struct alignas(16) fog_constants
     r32 fogEnd;
     r32 nearZ;
     r32 farZ;
+    r32 fogHeightFalloff;
+    r32 fogBaseHeight;
+    r32 baseFogDensity;
+};
+
+struct alignas(16) post_process_transforms_constants
+{
+    DirectX::XMMATRIX invViewProj;
+    DirectX::XMVECTOR cameraWorldPos;
 };
 
 struct sail_constant_buffers
@@ -135,6 +144,8 @@ struct sail_constant_buffers
     ID3D11Buffer* dynamicPBuffer;
 
     ID3D11Buffer* fogBuffer;
+    ID3D11Buffer* fogTransformsBuffer;
+
 };
 
 #define SAIL_WIN32_H
