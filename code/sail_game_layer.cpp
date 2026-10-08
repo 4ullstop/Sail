@@ -626,12 +626,13 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
     char* speedometerBottom = "../data/obj/speedometer_bottom_v1.obj";
     char* speedometerTop = "../data/obj/speedometer_top_v1.obj";
     char* skybox = "../data/obj/skybox.obj";
-    char* paths[512] = {boatPath, mastPath, refCubePath, windSockPath, axesPath, arrowPath, texTestPath, oceanPath, windDirModelBottom, windDirModelTop, marooned, windDirCardinal, winch, speedometerBottom, speedometerTop, skybox};
+    char* theSun = "../data/obj/sun.obj";
+	char* paths[512] = {boatPath, mastPath, refCubePath, windSockPath, axesPath, arrowPath, texTestPath, oceanPath, windDirModelBottom, windDirModelTop, marooned, windDirCardinal, winch, speedometerBottom, speedometerTop, skybox, theSun};
 
     
     initData->gameObjs = gameFrameworkCode->GameLoadOBJFiles(platformInfo->parseObjCode,
 							     &platformInfo->frameworkArenas,
-							     pgMem, memoryPoolCode, paths, 16);
+							     pgMem, memoryPoolCode, paths, 17);
 
     initData->isFreeCam = false;
 
@@ -644,14 +645,15 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
     texture_load_info leftSailTut = {"../data/textures/left_sail_tutorial.bmp", true};
     texture_load_info rightSailTut = {"../data/textures/right_sail_tutorial.bmp", true};
     texture_load_info skyboxCubemap = {"../data/textures/skybox_cubemap.bmp", false};
+    texture_load_info sunImg = {"../data/textures/the_sun.bmp", false};
     
-    texture_load_info allTextureInfo[9] = {testPathLoadInfo, windModelTexInfo, speedometerTexInfo, boatTexInfo, uiMap, uiBoat, leftSailTut, rightSailTut, skyboxCubemap};
+    texture_load_info allTextureInfo[10] = {testPathLoadInfo, windModelTexInfo, speedometerTexInfo, boatTexInfo, uiMap, uiBoat, leftSailTut, rightSailTut, skyboxCubemap, sunImg};
     
 
     initData->gameTextures = gameFrameworkCode->GameLoadTextures(allTextureInfo,
 								 platformInfo->frameworkArenas.setupArena,
 								 platformInfo->frameworkArenas.perFrameArena,
-								 9,
+								 10,
 								 DEBUGPlatformReadEntireFile,
 								 memoryPoolCode);
 
@@ -674,25 +676,43 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
     gameFrameworkCode->GameUpdateUITexture(tutSize,
 					   rightTutLoc,
 					   &initData->gameTextures.textures[tl_ui_right_tut - 1].uiInfo);
-    initData->gameTextures.textures[tl_ui_right_tut - 1].uiInfo.hidden = true;    
+    initData->gameTextures.textures[tl_ui_right_tut - 1].uiInfo.hidden = true;
+
+
 
     v4 spawnObjLoc = v4{0.0f, 0.0f, 10.0f, 1.0f};
     v4 oneScale = {1.0f, 1.0f, 1.0f, 1.0f};
 
     v4 axesRot = {1.0f, 0.0f, 0.0f, 0.0f};
 
+
+    transform sunTransform = {};
+    sunTransform.location = {0.0f, 100.0f, 0.0f};
+    sunTransform.rotation = QuaternionIdentity();
+    sunTransform.scale = oneScale;
+
+    initData->theSun = 
+	gameFrameworkCode->GameSpawnNewOBJ(sot_sun,
+					   sunTransform,
+					   &initData->gameObjs,
+					   memoryPoolCode,
+					   false,
+					   Identity());
+    initData->theSun->textureInfo = tl_sun;
     
     transform maroonedTransform = {};
     maroonedTransform.location = {0.0f, 0.0f, -50.0f};
     maroonedTransform.rotation = QuaternionIdentity();
     maroonedTransform.scale = oneScale;
 
-    gameFrameworkCode->GameSpawnNewOBJ(sot_marooned,
-				       maroonedTransform,
-				       &initData->gameObjs,
-				       memoryPoolCode,
-				       false,
-				       Identity());
+    spawned_obj_info* maroonedOBJ = 
+	gameFrameworkCode->GameSpawnNewOBJ(sot_marooned,
+					   maroonedTransform,
+					   &initData->gameObjs,
+					   memoryPoolCode,
+					   false,
+					   Identity());
+    maroonedOBJ->hidden = true;
     
     transform oceanTransform = {};
     oceanTransform.location = {0.0f, -5.0f, 0.0f, 0.f};
@@ -717,29 +737,35 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
 							     false,
 							     Identity());
     testTextureOBJ->textureInfo = tl_testing;
+    testTextureOBJ->hidden = true;
     
     transform axesTransform = {};
     axesTransform.location = {0.0f, 0.0f, 0.0f, 0.0f};
     axesTransform.rotation = QuaternionIdentity();
     axesTransform.scale = oneScale;
-    gameFrameworkCode->GameSpawnNewOBJ(spawnable_obj_type::sot_axes,
-				       axesTransform,
-				       &initData->gameObjs,
-				       memoryPoolCode,
-				       false,
-				       Identity());
+    spawned_obj_info* axes = 
+	gameFrameworkCode->GameSpawnNewOBJ(spawnable_obj_type::sot_axes,
+					   axesTransform,
+					   &initData->gameObjs,
+					   memoryPoolCode,
+					   false,
+					   Identity());
+    axes->hidden = true;
+    
 
     transform forwardArrowTransform = {};
     forwardArrowTransform.location = {0.0f, 0.0f, 0.0f, 0.0f};
     forwardArrowTransform.rotation = CreateQuaternionRotationFromVector(axesRot);
     forwardArrowTransform.scale = oneScale;
 
-    gameFrameworkCode->GameSpawnNewOBJ(spawnable_obj_type::sot_forward_arrow,
-				       forwardArrowTransform,
-				       &initData->gameObjs,
-				       memoryPoolCode,
-				       false,
-				       Identity());
+    spawned_obj_info* forwardArrow = 
+	gameFrameworkCode->GameSpawnNewOBJ(spawnable_obj_type::sot_forward_arrow,
+					   forwardArrowTransform,
+					   &initData->gameObjs,
+					   memoryPoolCode,
+					   false,
+					   Identity());
+    forwardArrow->hidden = true;
     
     
     transform refCubeTransform = {};
@@ -747,15 +773,17 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
     refCubeTransform.rotation = QuaternionIdentity();
     refCubeTransform.scale = oneScale;
 
-    gameFrameworkCode->GameSpawnNewOBJ(spawnable_obj_type::sot_ref,
-				       refCubeTransform,
-				       &initData->gameObjs,
-				       memoryPoolCode,
-				       false,
-				       Identity());
+    spawned_obj_info* refCube = 
+	gameFrameworkCode->GameSpawnNewOBJ(spawnable_obj_type::sot_ref,
+					   refCubeTransform,
+					   &initData->gameObjs,
+					   memoryPoolCode,
+					   false,
+					   Identity());
+    refCube->hidden = true;
     
     transform boatTransform = {};
-    boatTransform.location = spawnObjLoc;
+    boatTransform.location = v4{0.0f, 2.0f, 0.0f, 0.0f};
     boatTransform.rotation = QuaternionIdentity();
     boatTransform.scale = {1.0f, 1.0f, 1.0f, 1.0f};
     

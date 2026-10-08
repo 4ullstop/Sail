@@ -1,3 +1,6 @@
+TextureCube cubeMap : register(t0);
+SamplerState cubeMapSampler : register(s0);
+	
 struct PS_INPUT
 {
 	float4 position : SV_POSITION;
@@ -51,6 +54,8 @@ PS_OUTPUT main(PS_INPUT In)
 {
 	PS_OUTPUT output;
 
+
+
 	float3 N = normalize(In.normal.xyz);
 	float3 L = normalize(-sunNormal.xyz);
 
@@ -72,8 +77,30 @@ PS_OUTPUT main(PS_INPUT In)
 
 
 
+
+	float fresnelStrength = 0.2f;
+	float fresnelShininess = 0.2f;
+	float3 fresnelColor = float3(0.8f, 0.8f, 0.9f);
+	float fresnelBias = 5.0f;
+
+	float3 fresnelNormal = N;
+	fresnelNormal.xz *= fresnelStrength;
+	fresnelNormal = normalize(fresnelNormal);
+	float base = 1 - dot (V, fresnelNormal);
+
+	float exponential = pow(base, fresnelShininess);
+	float R = exponential + fresnelBias * (1.0f - exponential);
+	R *= fresnelStrength;
+	float3 fresnel =  fresnelColor * R;
+	
+	float4 reflectedDir = float4(reflect(-V, N), 1.0f);
+	float3 cube = cubeMap.Sample(cubeMapSampler, reflectedDir.xyz).rgb;
+
+	fresnel += cube.rgb * R;
+	specular *= fresnel;
+
 	float3 ambient = In.color.rgb * 0.1f;
-	output.RGBColor = float4((ambient + diffuse + specular), In.color.a);
+	output.RGBColor = float4((ambient + diffuse + specular + fresnel), In.color.a);
 
 
 	return(output);

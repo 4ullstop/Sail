@@ -291,6 +291,7 @@ struct sail_initialize_data
     joystick_rotation oldJoystick;
 
     spawned_obj_info* skybox;
+    spawned_obj_info* theSun;
 };
 
 struct platform_info

@@ -101,6 +101,10 @@ struct ocean_buffers
     ocean_sine_constant oceanSC;
 
     ID3D11Buffer* oceanLightingBuffer;
+    ID3D11SamplerState* cubemapSamplerState;
+
+    ID3D11ShaderResourceView* cubeMapSRV;
+    ID3D11Texture2D* skyboxBuffer;
 };
 
 struct object_constants

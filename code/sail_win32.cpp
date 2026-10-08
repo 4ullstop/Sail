@@ -667,7 +667,7 @@ Render2D(shaders* shader, win32_spawnable_objs* win32Objs)
 }
 
 internal void
-RenderOcean(ocean* oceanGrid, ocean_buffers* oceanBuffers, shaders* shader, sail_constant_buffers* cBuffers)
+RenderOcean(ocean* oceanGrid, ocean_buffers* oceanBuffers, shaders* shader, sail_constant_buffers* cBuffers, texture_buffers* textures)
 {
     HRESULT hr = {};
 
@@ -690,6 +690,12 @@ RenderOcean(ocean* oceanGrid, ocean_buffers* oceanBuffers, shaders* shader, sail
     context->VSSetConstantBuffers(1, 1, &oceanBuffers->oceanUpdateBuffer);
     context->VSSetConstantBuffers(2, 1, &oceanBuffers->oceanSineConstants);
     context->PSSetConstantBuffers(0, 1, &oceanBuffers->oceanLightingBuffer);
+
+    context->PSSetShaderResources(0, 1, &oceanBuffers->cubeMapSRV);
+    context->PSSetSamplers(0, 1, &oceanBuffers->cubemapSamplerState);
+    
+
+    
     //Perform mapping like with objects above
     D3D11_MAPPED_SUBRESOURCE mapped;
     hr = context->Map(oceanBuffers->oceanUpdateBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
@@ -771,71 +777,73 @@ Render(game_loaded_objs* gameObjs, win32_spawnable_objs* win32Objs, sail_constan
 	Assert(objNode);
 
 	spawned_obj_info* objInfo = (spawned_obj_info*)objNode->data;
-	draw_buffers* drawBuffers = GetDrawBuffersFromSpawnable(win32Objs, objInfo);
-	context->VSSetConstantBuffers(1, 1, &cBuffers->dynamicVBuffer);
-
-	/*
-	  Update vertex position color to have MATERIAL_ID and update InputDescription to include this too
-	  Then Create a material Properties to represent the structue of a material,
-	  Using MATERIAL_ID passed to the pixel shader, find the material based on a look up using
-	  StructedBuffer<MaterialProperties> AllMaterials : register(t0)
-	  ^^You need to create this in DX11 code as well, then you need to assign the array per object being rendered
-	 */
-	
-	UINT stride = sizeof(vertex_position_color);
-	UINT offset = 0;
-
-	context->IASetVertexBuffers(0, 1, &drawBuffers->vertexBuffer, &stride, &offset);
-	context->IASetIndexBuffer(drawBuffers->indexBuffer, DXGI_FORMAT_R16_UINT, 0);
-
-	
-	D3D11_MAPPED_SUBRESOURCE mapped;
-	hr = context->Map(cBuffers->dynamicVBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
-	object_constants* data = (object_constants*)mapped.pData;
-
-	
-	DirectX::XMMATRIX dxMat = win32Code.Win32FromM4ToXMMATRIX(objInfo->modelMatrix);
-	dxMat = DirectX::XMMatrixTranspose(dxMat);
-	
-	DirectX::XMStoreFloat4x4(&data->modelMat, dxMat);
-	context->Unmap(cBuffers->dynamicVBuffer, 0);
-
-	//determine if there is a texture then load it if there is
-	DirectX::XMVECTOR storedMatData = {};	
-	if (objInfo->textureInfo > 0)
+	if (objInfo->hidden == false)
 	{
-	    context->PSSetShaderResources(2, 1, &win32Objs->textureBuffers[objInfo->textureInfo - 1].textureResourceView);
-	    context->PSSetSamplers(0, 1, &textureSamplerState);
-	    storedMatData = DirectX::XMVectorSetY(storedMatData, (r32)1.0f);
+	    draw_buffers* drawBuffers = GetDrawBuffersFromSpawnable(win32Objs, objInfo);
+	    context->VSSetConstantBuffers(1, 1, &cBuffers->dynamicVBuffer);
+
+	    /*
+	      Update vertex position color to have MATERIAL_ID and update InputDescription to include this too
+	      Then Create a material Properties to represent the structue of a material,
+	      Using MATERIAL_ID passed to the pixel shader, find the material based on a look up using
+	      StructedBuffer<MaterialProperties> AllMaterials : register(t0)
+	      ^^You need to create this in DX11 code as well, then you need to assign the array per object being rendered
+	    */
+	
+	    UINT stride = sizeof(vertex_position_color);
+	    UINT offset = 0;
+
+	    context->IASetVertexBuffers(0, 1, &drawBuffers->vertexBuffer, &stride, &offset);
+	    context->IASetIndexBuffer(drawBuffers->indexBuffer, DXGI_FORMAT_R16_UINT, 0);
+
+	
+	    D3D11_MAPPED_SUBRESOURCE mapped;
+	    hr = context->Map(cBuffers->dynamicVBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
+	    object_constants* data = (object_constants*)mapped.pData;
+
+	
+	    DirectX::XMMATRIX dxMat = win32Code.Win32FromM4ToXMMATRIX(objInfo->modelMatrix);
+	    dxMat = DirectX::XMMatrixTranspose(dxMat);
+	
+	    DirectX::XMStoreFloat4x4(&data->modelMat, dxMat);
+	    context->Unmap(cBuffers->dynamicVBuffer, 0);
+
+	    //determine if there is a texture then load it if there is
+	    DirectX::XMVECTOR storedMatData = {};	
+	    if (objInfo->textureInfo > 0)
+	    {
+		context->PSSetShaderResources(2, 1, &win32Objs->textureBuffers[objInfo->textureInfo - 1].textureResourceView);
+		context->PSSetSamplers(0, 1, &textureSamplerState);
+		storedMatData = DirectX::XMVectorSetY(storedMatData, (r32)1.0f);
+	    }
+	
+	    context->PSSetConstantBuffers(0, 1, &cBuffers->dynamicPBuffer);
+	    hr = context->Map(cBuffers->dynamicPBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
+	    material_constants* matData = (material_constants*)mapped.pData;
+
+	    storedMatData = DirectX::XMVectorSetX(storedMatData, (r32)drawBuffers->hasMaterials);
+	    DirectX::XMStoreFloat4(&matData->hasMaterials, storedMatData);
+	    context->Unmap(cBuffers->dynamicPBuffer, 0);
+
+	    if (drawBuffers->materialBuffer != nullptr)
+	    {
+		context->PSSetShaderResources(0, 1, &drawBuffers->materialResourceView);
+		context->PSSetShaderResources(1, 1, &drawBuffers->materialPropertiesView);
+	    }
+
+	
+	
+	    context->DrawIndexed(
+		drawBuffers->indexCount,
+		0,
+		0);
 	}
-	
-	context->PSSetConstantBuffers(0, 1, &cBuffers->dynamicPBuffer);
-	hr = context->Map(cBuffers->dynamicPBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
-	material_constants* matData = (material_constants*)mapped.pData;
-
-	storedMatData = DirectX::XMVectorSetX(storedMatData, (r32)drawBuffers->hasMaterials);
-	DirectX::XMStoreFloat4(&matData->hasMaterials, storedMatData);
-	context->Unmap(cBuffers->dynamicPBuffer, 0);
-
-	if (drawBuffers->materialBuffer != nullptr)
-	{
-	    context->PSSetShaderResources(0, 1, &drawBuffers->materialResourceView);
-	    context->PSSetShaderResources(1, 1, &drawBuffers->materialPropertiesView);
-	}
-
-	
-	
-	context->DrawIndexed(
-	    drawBuffers->indexCount,
-	    0,
-	    0);
-
 	objNode = objNode->next;
     }
 
     //temp ocean rendering code until we make new shaders and such
 
-    RenderOcean(oceanGrid, oceanBuffers, shader, cBuffers);
+    RenderOcean(oceanGrid, oceanBuffers, shader, cBuffers, win32Objs->textureBuffers);
 
 
     //Set up our 3D for post processing 
@@ -1204,7 +1212,88 @@ int CALLBACK WinMain(HINSTANCE hInstance,
 	    hr = d3dDevice->CreateRenderTargetView(postProcessTexture, nullptr, &postProcessRTV);
 	    d3dDevice->CreateShaderResourceView(postProcessTexture, &ppSrvDesc, &postProcessSRV);	    
 //3d	    
+	    //Ocean texture sample buffers
+	    D3D11_SAMPLER_DESC cubemapSampler = {};
+	    cubemapSampler.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+	    cubemapSampler.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
+	    cubemapSampler.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
+	    cubemapSampler.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
+	    cubemapSampler.ComparisonFunc = D3D11_COMPARISON_NEVER;
+	    cubemapSampler.MinLOD = 0;
+	    cubemapSampler.MaxLOD = D3D11_FLOAT32_MAX;
 
+	    hr = d3dDevice->CreateSamplerState(&cubemapSampler, &oceanBuffers.cubemapSamplerState);
+
+	    //Get the texture desc from initialized texture
+	    D3D11_TEXTURE2D_DESC tex2DCubeMap;
+	    win32Buffers.textureBuffers[tl_skybox - 1].textureData->GetDesc(&tex2DCubeMap);
+
+	    thread_context dummy;
+	    char* nxn = "../data/textures/skybox/nx.bmp";
+	    char* nyn = "../data/textures/skybox/ny.bmp";
+	    char* nzn = "../data/textures/skybox/nz.bmp";
+	    char* pxn = "../data/textures/skybox/px.bmp";
+	    char* pyn = "../data/textures/skybox/py.bmp";
+	    char* pzn = "../data/textures/skybox/pz.bmp";   
+	    char* allNames[6] = {pxn, nxn, pyn, nyn, pzn, nzn};
+	    
+
+	    loaded_bitmap testBMP = DEBUGLoadBMP(&dummy,
+					    DEBUGPlatformReadEntireFile,
+					    pzn,
+					    &memoryPoolCode,
+					    platformInfo.frameworkArenas.perFrameArena);	    
+	    
+	    
+	    D3D11_TEXTURE2D_DESC skyboxCubemapDesc = {};
+	    skyboxCubemapDesc.Width = testBMP.width;
+	    skyboxCubemapDesc.Height = testBMP.height;
+	    skyboxCubemapDesc.MipLevels = 1;
+	    skyboxCubemapDesc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+	    skyboxCubemapDesc.SampleDesc.Count = 1;
+	    skyboxCubemapDesc.SampleDesc.Quality = 0;
+	    skyboxCubemapDesc.Usage = D3D11_USAGE_DEFAULT;
+	    skyboxCubemapDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+	    skyboxCubemapDesc.CPUAccessFlags = 0;
+	    skyboxCubemapDesc.ArraySize = 6;
+	    skyboxCubemapDesc.MiscFlags = D3D11_RESOURCE_MISC_TEXTURECUBE;
+
+	    D3D11_SUBRESOURCE_DATA skyboxData[6];
+
+
+
+	    
+	    for (i32 i = 0; i < 6; i++)
+	    {
+		char* name = allNames[i];
+		loaded_bitmap bitmap = DEBUGLoadBMP(&dummy,
+						    DEBUGPlatformReadEntireFile,
+						    name,
+						    &memoryPoolCode,
+						    platformInfo.frameworkArenas.perFrameArena);
+		UINT faceSizeInBytes = bitmap.width * bitmap.height * sizeof(u32);
+		skyboxData[i].pSysMem = bitmap.pixels;
+		skyboxData[i].SysMemPitch = bitmap.width * sizeof(u32);
+		skyboxData[i].SysMemSlicePitch = 0;
+	    }
+
+
+
+
+	    hr = d3dDevice->CreateTexture2D(&skyboxCubemapDesc, skyboxData, &oceanBuffers.skyboxBuffer);
+	    
+
+	    D3D11_SHADER_RESOURCE_VIEW_DESC cubeMapSRV;
+	    cubeMapSRV.Format = skyboxCubemapDesc.Format;
+	    cubeMapSRV.ViewDimension = D3D11_SRV_DIMENSION_TEXTURECUBE;
+	    cubeMapSRV.TextureCube.MostDetailedMip = 0;
+	    cubeMapSRV.TextureCube.MipLevels = 1;
+
+	    hr = d3dDevice->CreateShaderResourceView(oceanBuffers.skyboxBuffer,
+						     &cubeMapSRV,
+						     &oceanBuffers.cubeMapSRV);
+
+	    
 	    D3D11_DEPTH_STENCIL_DESC depthDesc3D = {};
 	    depthDesc3D.DepthEnable = TRUE;
 	    depthDesc3D.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
@@ -1370,7 +1459,7 @@ int CALLBACK WinMain(HINSTANCE hInstance,
 	    fog.farZ = gameCamera.farZ;
 	    fog.fogHeightFalloff = 0.05f;
 	    fog.fogBaseHeight = 1.0f;
-	    fog.baseFogDensity = 0.01f;
+	    fog.baseFogDensity = 0.008f;
 
 	    D3D11_SUBRESOURCE_DATA fogData;
 	    ZeroMemory(&fogData, sizeof(D3D11_SUBRESOURCE_DATA));
@@ -1479,7 +1568,7 @@ int CALLBACK WinMain(HINSTANCE hInstance,
 		boat_entity* boat = &sailInitData.boat;
 		sail_type* main = &boat->sailInfo.mainSail;
 
-		v4 oceanNewLoc = {boat->objInfo->modelTransform.location.x, -1.0f, boat->objInfo->modelTransform.location.z, 1.0f};
+		v4 oceanNewLoc = {boat->objInfo->modelTransform.location.x, -1.4f, boat->objInfo->modelTransform.location.z, 1.0f};
 		v4 oceanScale = {1.0f, 1.0f, 1.0f, 1.0f};
 		v4 oceanRotation = QuaternionIdentity();
 		oceanGrid.oceanModelMat = CreateModelMatrix(oceanScale,
