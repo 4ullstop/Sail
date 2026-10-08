@@ -100,7 +100,7 @@ struct ocean
 };
 
 internal ocean_buffers
-CreateOceanBuffers(ocean* oceanGrid, global_lighting* sun)
+CreateOceanBuffers(ocean* oceanGrid)
 {
     ocean_buffers buffers = {};
 
@@ -182,21 +182,6 @@ CreateOceanBuffers(ocean* oceanGrid, global_lighting* sun)
     hr = d3dDevice->CreateBuffer(&cbDesc, &sineConstantData, &buffers.oceanSineConstants);
     
 
-    D3D11_BUFFER_DESC lightDesc = {};
-    lightDesc.Usage = D3D11_USAGE_DEFAULT;
-    lightDesc.ByteWidth = sizeof(global_lighting);
-    lightDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
-    lightDesc.CPUAccessFlags = 0;
-
-
-
-    D3D11_SUBRESOURCE_DATA sunData;
-    ZeroMemory(&sunData, sizeof(D3D11_SUBRESOURCE_DATA));
-    sunData.pSysMem = sun;
-    sunData.SysMemPitch = 0;
-    sunData.SysMemSlicePitch = 0;
-
-    hr = d3dDevice->CreateBuffer(&lightDesc, &sunData, &buffers.oceanLightingBuffer);
     
     return(buffers);
 }
@@ -215,8 +200,8 @@ CreateOceanGrid(memory_arena* arena)
 						oceanRot,
 						oceanLoc);
     oceanGrid.oceanModelMat = oceanGrid.oceanModelMat * Identity();
-    oceanGrid.sliceWidth = 400;
-    oceanGrid.sliceLength = 400;
+    oceanGrid.sliceWidth = 600;
+    oceanGrid.sliceLength = 600;
     oceanGrid.width = 200.0f;
     oceanGrid.length = 200.0f;
 
@@ -689,7 +674,7 @@ RenderOcean(ocean* oceanGrid, ocean_buffers* oceanBuffers, shaders* shader, sail
 
     context->VSSetConstantBuffers(1, 1, &oceanBuffers->oceanUpdateBuffer);
     context->VSSetConstantBuffers(2, 1, &oceanBuffers->oceanSineConstants);
-    context->PSSetConstantBuffers(0, 1, &oceanBuffers->oceanLightingBuffer);
+    context->PSSetConstantBuffers(0, 1, &cBuffers->sunBuffer);
 
     context->PSSetShaderResources(0, 1, &oceanBuffers->cubeMapSRV);
     context->PSSetSamplers(0, 1, &oceanBuffers->cubemapSamplerState);
@@ -769,6 +754,7 @@ Render(game_loaded_objs* gameObjs, win32_spawnable_objs* win32Objs, sail_constan
     
 
 
+
     listed_memory_node* objNode = (listed_memory_node*)gameObjs->spawnedObjNodes;
     
     HRESULT hr = {};
@@ -781,7 +767,7 @@ Render(game_loaded_objs* gameObjs, win32_spawnable_objs* win32Objs, sail_constan
 	{
 	    draw_buffers* drawBuffers = GetDrawBuffersFromSpawnable(win32Objs, objInfo);
 	    context->VSSetConstantBuffers(1, 1, &cBuffers->dynamicVBuffer);
-
+	    context->PSSetConstantBuffers(1, 1, &cBuffers->sunBuffer);
 	    /*
 	      Update vertex position color to have MATERIAL_ID and update InputDescription to include this too
 	      Then Create a material Properties to represent the structue of a material,
@@ -816,8 +802,12 @@ Render(game_loaded_objs* gameObjs, win32_spawnable_objs* win32Objs, sail_constan
 		context->PSSetSamplers(0, 1, &textureSamplerState);
 		storedMatData = DirectX::XMVectorSetY(storedMatData, (r32)1.0f);
 	    }
-	
+	    if (objInfo->unlit)
+	    {
+		storedMatData = DirectX::XMVectorSetZ(storedMatData, (r32)1.0f);
+	    }
 	    context->PSSetConstantBuffers(0, 1, &cBuffers->dynamicPBuffer);
+
 	    hr = context->Map(cBuffers->dynamicPBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
 	    material_constants* matData = (material_constants*)mapped.pData;
 
@@ -1119,10 +1109,11 @@ int CALLBACK WinMain(HINSTANCE hInstance,
 
     global_lighting sun = {};
     sun.lightNormal = DirectX::XMVectorSet(0.0f, -1.0f, 0.0f, 0.0f);
-    sun.location = DirectX::XMVectorSet(0.0f, 5.0f, 1.0f, 0.0f);
+    sun.lightColor = DirectX::XMVectorSet(0.1f, 0.1f, 0.1f, 0.0f);
+    sun.lightIntensity = 10.0f;
     
     ocean oceanGrid = CreateOceanGrid(platformInfo.frameworkArenas.setupArena);
-    ocean_buffers oceanBuffers = CreateOceanBuffers(&oceanGrid, &sun);
+    ocean_buffers oceanBuffers = CreateOceanBuffers(&oceanGrid);
     
     if (RegisterClass(&wc))
     {
@@ -1410,6 +1401,20 @@ int CALLBACK WinMain(HINSTANCE hInstance,
 	    
 	    hr = d3dDevice->CreateBuffer(&cbDesc, NULL, &sailConstantBuffers.dynamicVBuffer);
 
+	    D3D11_BUFFER_DESC lightDesc = {};
+	    lightDesc.Usage = D3D11_USAGE_DEFAULT;
+	    lightDesc.ByteWidth = sizeof(global_lighting);//change this struct
+	    lightDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+	    lightDesc.CPUAccessFlags = 0;
+
+	    D3D11_SUBRESOURCE_DATA sunData;
+	    ZeroMemory(&sunData, sizeof(D3D11_SUBRESOURCE_DATA));
+	    sunData.pSysMem = &sun;
+	    sunData.SysMemPitch = 0;
+	    sunData.SysMemSlicePitch = 0;
+
+	    hr = d3dDevice->CreateBuffer(&lightDesc, &sunData, &sailConstantBuffers.sunBuffer);
+	    
 	    D3D11_BUFFER_DESC pCbDesc = {};
 	    pCbDesc.Usage = D3D11_USAGE_DYNAMIC;
 	    pCbDesc.ByteWidth = sizeof(material_constants);

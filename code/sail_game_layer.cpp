@@ -1003,6 +1003,7 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
 							  false,
 							  Identity());
     initData->skybox->textureInfo = tl_skybox;
+    initData->skybox->unlit = true;
 
     
     return(cameraResult);

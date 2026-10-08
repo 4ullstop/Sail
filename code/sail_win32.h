@@ -86,7 +86,8 @@ struct alignas(16) ocean_sine_constant
 struct global_lighting
 {
     DirectX::XMVECTOR lightNormal;
-    DirectX::XMVECTOR location;
+    DirectX::XMVECTOR lightColor;
+    r32 lightIntensity;
 };
 
 struct ocean_buffers
@@ -100,7 +101,7 @@ struct ocean_buffers
 
     ocean_sine_constant oceanSC;
 
-    ID3D11Buffer* oceanLightingBuffer;
+
     ID3D11SamplerState* cubemapSamplerState;
 
     ID3D11ShaderResourceView* cubeMapSRV;
@@ -151,6 +152,8 @@ struct sail_constant_buffers
     ID3D11Buffer* fogBuffer;
     ID3D11Buffer* fogTransformsBuffer;
 
+
+    ID3D11Buffer* sunBuffer;
 };
 
 #define SAIL_WIN32_H
