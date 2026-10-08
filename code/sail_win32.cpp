@@ -85,14 +85,14 @@ struct ocean
     r32 width;
     r32 length;
 
-    i32 sliceWidth;
-    i32 sliceLength;
+    u32 sliceWidth;
+    u32 sliceLength;
     
     i32 resolution;
     vertex_position_color* verts;
-    u16* indices;
+    u32* indices;
 
-    i32 indexCount;
+    u32 indexCount;
 
     m4 oceanModelMat;
 
@@ -124,7 +124,7 @@ CreateOceanBuffers(ocean* oceanGrid, global_lighting* sun)
 				 &buffers.vertBuffer);
 
     CD3D11_BUFFER_DESC indexDesc(
-	sizeof(u16) * oceanGrid->indexCount,
+	sizeof(u32) * oceanGrid->indexCount,
 	D3D11_BIND_INDEX_BUFFER);
 
     buffers.indexCount = oceanGrid->indexCount;
@@ -215,13 +215,13 @@ CreateOceanGrid(memory_arena* arena)
 						oceanRot,
 						oceanLoc);
     oceanGrid.oceanModelMat = oceanGrid.oceanModelMat * Identity();
-    oceanGrid.sliceWidth = 200;
-    oceanGrid.sliceLength = 200;
-    oceanGrid.width = 100.0f;
-    oceanGrid.length = 100.0f;
+    oceanGrid.sliceWidth = 400;
+    oceanGrid.sliceLength = 400;
+    oceanGrid.width = 200.0f;
+    oceanGrid.length = 200.0f;
 
-    i32 vertexCountX = oceanGrid.sliceWidth + 1;
-    i32 vertexCountZ = oceanGrid.sliceLength + 1;
+    u32 vertexCountX = oceanGrid.sliceWidth + 1;
+    u32 vertexCountZ = oceanGrid.sliceLength + 1;
     oceanGrid.resolution = vertexCountX * vertexCountZ;
     oceanGrid.planeSize = 0.5f;
 
@@ -234,10 +234,10 @@ CreateOceanGrid(memory_arena* arena)
 	(vertex_position_color*)memoryPoolCode.PushArraySized(arena, sizeof(vertex_position_color) * oceanGrid.resolution);
 
     
-    for (i32 z = 0, i = 0; z < vertexCountZ; ++z)
+    for (u32 z = 0, i = 0; z < vertexCountZ; ++z)
     {
 	r32 zPos = halfLength - (z * dz);
-	for (i32 x = 0; x < vertexCountX; ++x)
+	for (u32 x = 0; x < vertexCountX; ++x)
 	{
 	    r32 xPos = -halfWidth + (x * dx);
 	    vertex_position_color v;
@@ -250,16 +250,16 @@ CreateOceanGrid(memory_arena* arena)
 
     u32 totalQuadCount = oceanGrid.sliceWidth * oceanGrid.sliceLength;
     u32 totalIndexCount = totalQuadCount * 6;
-    oceanGrid.indices = (u16*)memoryPoolCode.PushArraySized(arena, sizeof(u16) * totalIndexCount);
+    oceanGrid.indices = (u32*)memoryPoolCode.PushArraySized(arena, sizeof(u32) * totalIndexCount);
     u32 indexOffset = 0;
-    for (u16 z = 0; z < oceanGrid.sliceLength; ++z)
+    for (u32 z = 0; z < oceanGrid.sliceLength; ++z)
     {
-	for (u16 x = 0; x < oceanGrid.sliceWidth; ++x)
+	for (u32 x = 0; x < oceanGrid.sliceWidth; ++x)
 	{
-	    u16 topLeft = (u16)(z * vertexCountX) + x;
-	    u16 topRight = topLeft + 1;
-	    u16 bottomLeft = (u16)((z + 1) * vertexCountX) + x;
-	    u16 bottomRight = bottomLeft + 1;
+	    u32 topLeft = (u32)(z * vertexCountX) + x;
+	    u32 topRight = topLeft + 1;
+	    u32 bottomLeft = (u32)((z + 1) * vertexCountX) + x;
+	    u32 bottomRight = bottomLeft + 1;
 
 	    oceanGrid.indices[indexOffset++] = topLeft;
 	    oceanGrid.indices[indexOffset++] = bottomLeft;
@@ -685,7 +685,7 @@ RenderOcean(ocean* oceanGrid, ocean_buffers* oceanBuffers, shaders* shader, sail
     UINT ooffset = 0;
 
     context->IASetVertexBuffers(0, 1, &oceanBuffers->vertBuffer, &ostride, &ooffset);
-    context->IASetIndexBuffer(oceanBuffers->indexBuffer, DXGI_FORMAT_R16_UINT, 0);
+    context->IASetIndexBuffer(oceanBuffers->indexBuffer, DXGI_FORMAT_R32_UINT, 0);
 
     context->VSSetConstantBuffers(1, 1, &oceanBuffers->oceanUpdateBuffer);
     context->VSSetConstantBuffers(2, 1, &oceanBuffers->oceanSineConstants);
