@@ -100,7 +100,7 @@ struct ocean
 };
 
 internal ocean_buffers
-CreateOceanBuffers(ocean* oceanGrid)
+CreateOceanBuffers(ocean* oceanGrid, global_lighting* sun)
 {
     ocean_buffers buffers = {};
 
@@ -188,13 +188,11 @@ CreateOceanBuffers(ocean* oceanGrid)
     lightDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
     lightDesc.CPUAccessFlags = 0;
 
-    global_lighting sun = {};
-    sun.lightNormal = DirectX::XMVectorSet(0.0f, -1.0f, 0.0f, 0.0f);
-    sun.location = DirectX::XMVectorSet(0.0f, 5.0f, 1.0f, 0.0f);
+
 
     D3D11_SUBRESOURCE_DATA sunData;
     ZeroMemory(&sunData, sizeof(D3D11_SUBRESOURCE_DATA));
-    sunData.pSysMem = &sun;
+    sunData.pSysMem = sun;
     sunData.SysMemPitch = 0;
     sunData.SysMemSlicePitch = 0;
 
@@ -710,7 +708,7 @@ RenderOcean(ocean* oceanGrid, ocean_buffers* oceanBuffers, shaders* shader, sail
 }
 
 internal void
-Render(game_loaded_objs* gameObjs, win32_spawnable_objs* win32Objs, sail_constant_buffers* cBuffers, shaders* shader, dx_camera* dxCam, ocean_buffers* oceanBuffers, ocean* oceanGrid)
+Render(game_loaded_objs* gameObjs, win32_spawnable_objs* win32Objs, sail_constant_buffers* cBuffers, shaders* shader, dx_camera* dxCam, ocean_buffers* oceanBuffers, ocean* oceanGrid, global_lighting* sun)
 {
     //Normal render setup
     r32 teal[] = {0.098f, 0.439f, 1.000f};
@@ -839,13 +837,14 @@ Render(game_loaded_objs* gameObjs, win32_spawnable_objs* win32Objs, sail_constan
 
     RenderOcean(oceanGrid, oceanBuffers, shader, cBuffers);
 
-#if 1
+
     //Set up our 3D for post processing 
 
     post_process_transforms_constants ppTransforms = {};
     DirectX::XMMATRIX view = DirectX::XMLoadFloat4x4(&dxCam->constantBufferData.view);
     ppTransforms.invViewProj = DirectX::XMMatrixInverse(NULL, view);
     ppTransforms.cameraWorldPos = dxCam->position;
+    ppTransforms.sunDir = sun->lightNormal;
     context->UpdateSubresource(cBuffers->fogTransformsBuffer, 0, nullptr, &ppTransforms, 0, 0);
     
     context->OMSetRenderTargets(0, nullptr, nullptr);
@@ -876,7 +875,7 @@ Render(game_loaded_objs* gameObjs, win32_spawnable_objs* win32Objs, sail_constan
     ID3D11Buffer* nullCBs[] = {nullptr, nullptr};
     context->VSSetConstantBuffers(1, 2, nullCBs);
     
-#endif    
+
 
     
     
@@ -1110,9 +1109,12 @@ int CALLBACK WinMain(HINSTANCE hInstance,
 					  d3dDevice);
 
 
+    global_lighting sun = {};
+    sun.lightNormal = DirectX::XMVectorSet(0.0f, -1.0f, 0.0f, 0.0f);
+    sun.location = DirectX::XMVectorSet(0.0f, 5.0f, 1.0f, 0.0f);
+    
     ocean oceanGrid = CreateOceanGrid(platformInfo.frameworkArenas.setupArena);
-    ocean_buffers oceanBuffers = CreateOceanBuffers(&oceanGrid);
-
+    ocean_buffers oceanBuffers = CreateOceanBuffers(&oceanGrid, &sun);
     
     if (RegisterClass(&wc))
     {
@@ -1387,6 +1389,7 @@ int CALLBACK WinMain(HINSTANCE hInstance,
 	    post_process_transforms_constants ppTransforms = {};
 	    ppTransforms.invViewProj = win32Code.Win32FromM4ToXMMATRIX(gameCamera.viewInv);
 	    ppTransforms.cameraWorldPos = win32Code.Win32FromV4ToXMVECTOR(gameCamera.position);
+	    ppTransforms.sunDir = sun.lightNormal;
 	    
 	    D3D11_SUBRESOURCE_DATA transformsData;
 	    ZeroMemory(&transformsData, sizeof(D3D11_SUBRESOURCE_DATA));
@@ -1476,6 +1479,13 @@ int CALLBACK WinMain(HINSTANCE hInstance,
 		boat_entity* boat = &sailInitData.boat;
 		sail_type* main = &boat->sailInfo.mainSail;
 
+		v4 oceanNewLoc = {boat->objInfo->modelTransform.location.x, -1.0f, boat->objInfo->modelTransform.location.z, 1.0f};
+		v4 oceanScale = {1.0f, 1.0f, 1.0f, 1.0f};
+		v4 oceanRotation = QuaternionIdentity();
+		oceanGrid.oceanModelMat = CreateModelMatrix(oceanScale,
+							oceanRotation,
+							oceanNewLoc);
+		    
 		
 		char normalBoat[256];
 		sprintf_s(normalBoat, sizeof(normalBoat), "Wave Level: %i\n",
@@ -1495,7 +1505,7 @@ int CALLBACK WinMain(HINSTANCE hInstance,
 		
 		win32Code.Win32ConvertGameCameraToWin32(&dxCam, &gCamData);
 
-		Render(&sailInitData.gameObjs, &win32Buffers, &sailConstantBuffers, &gameShaders, &dxCam, &oceanBuffers, &oceanGrid);
+		Render(&sailInitData.gameObjs, &win32Buffers, &sailConstantBuffers, &gameShaders, &dxCam, &oceanBuffers, &oceanGrid, &sun);
 
 		swapChain->Present(1, 0);
 

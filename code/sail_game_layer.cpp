@@ -681,17 +681,6 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
 
     v4 axesRot = {1.0f, 0.0f, 0.0f, 0.0f};
 
-    transform skyboxTransform = {};
-    skyboxTransform.location = {0.0f, 0.0f, 0.0f};
-    skyboxTransform.rotation = QuaternionIdentity();
-    skyboxTransform.scale = oneScale;
-    initData->skybox = gameFrameworkCode->GameSpawnNewOBJ(sot_skybox,
-							  skyboxTransform,
-							  &initData->gameObjs,
-							  memoryPoolCode,
-							  false,
-							  Identity());
-    initData->skybox->textureInfo = tl_skybox;
     
     transform maroonedTransform = {};
     maroonedTransform.location = {0.0f, 0.0f, -50.0f};
@@ -972,6 +961,21 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
     CalculateCameraLocation(&cameraResult, &initData->boat);
 
     initData->isFreeCam = STARTFREECAM;
+
+
+
+    transform skyboxTransform = {};
+    skyboxTransform.location = {0.0f, 0.0f, 0.0f};
+    skyboxTransform.rotation = QuaternionIdentity();
+    skyboxTransform.scale = oneScale;
+    initData->skybox = gameFrameworkCode->GameSpawnNewOBJ(sot_skybox,
+							  skyboxTransform,
+							  &initData->gameObjs,
+							  memoryPoolCode,
+							  false,
+							  Identity());
+    initData->skybox->textureInfo = tl_skybox;
+
     
     return(cameraResult);
 }
@@ -1750,5 +1754,12 @@ extern "C" SAIL_UPDATE(SailUpdate)
     gameFrameworkCode->GameUpdateUITexture(initData->gameTextures.textures[tl_ui_boat - 1].uiInfo.size,
 					   marker,
 					   &initData->gameTextures.textures[tl_ui_boat - 1].uiInfo);
-					   
+
+
+    spawned_obj_info* skybox = initData->skybox;
+    skybox->modelTransform.location = boat->objInfo->modelTransform.location;
+    skybox->modelMatrix = CreateModelMatrix(skybox->modelTransform.scale,
+					    skybox->modelTransform.rotation,
+					    skybox->modelTransform.location);
+    
 }

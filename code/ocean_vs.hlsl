@@ -13,6 +13,7 @@ struct VS_OUTPUT
 	float2 texCoord : TEXCOORD;
 	float4 normal : NORMAL0;
 	float4 cameraPosition : NORMAL1;
+	float4 cameraForward : FORWARD0;
 };
 
 cbuffer ModelViewProjectionConstantBuffer : register(b0)
@@ -20,6 +21,7 @@ cbuffer ModelViewProjectionConstantBuffer : register(b0)
 	matrix mWorld;
 	matrix view;
 	matrix projection;
+	matrix viewInverted;
 	float4 cameraPosition;
 }
 
@@ -46,49 +48,46 @@ VS_OUTPUT main(VS_INPUT input)
 	float dYdx = 0.0f;
 	float dYdz = 0.0f;
 
+	float e = 2.71828182f;
+
 	for (int i = 0; i < 4; i++)
 	{
 		for (int j = 0; j < 4; j++)
 		{
-			float2 d = float2(directions[i][j] + dYdx, directions[j][i] + dYdz);
-			d = normalize(d);
-			float e = 2.71828182;
+			float2 d = normalize(float2(directions[i][j], directions[j][i]));
+
 			float dotPos = dot(d, pos.xz);
 			float phaseAngle = dotPos * frequency[i][j] + t * phase[i][j];
 
-//			totalY += pow(2.71828182, ((amp[i][j] * sin(phaseAngle)) - 1.5));
-
-			totalY += amp[i][j] * pow(e, sin(phaseAngle) - 1);
-
+			float sinVal = sin(phaseAngle);
 			float cosVal = cos(phaseAngle);
-#if 0
-			dYdx += amp[i][j] * frequency[i][j] * d.x * cosVal;
-			dYdz += amp[i][j] * frequency[i][j] * d.y * cosVal;
-#else
-			dYdx += frequency[i][j] * d.x * pow(e, ((amp[i][j] * cosVal) - 1.0f));
-			dYdz += frequency[i][j] * d.y * pow(e, ((amp[i][j] * cosVal) - 1.0f));		
-#endif
+
+			float expTerm = pow(e, sinVal - 1.0f);
+			totalY += amp[i][j] * expTerm;
+
+			float dTerm = amp[i][j] * expTerm * cosVal * frequency[i][j];
+
+			dYdx += dTerm * d.x;
+			dYdz += dTerm * d.y;
 		}
 	}
 
 	pos.y += totalY;
 
-	float3 binormal = float3(1.0f, dYdx, 0.0f);
-	float3 tangent = float3(0.0f, dYdz, 1.0f);
+	float3 objectNormal = normalize(float3(-dYdx, 1.0f, -dYdz));
 
-	float3 objectNormal = normalize(cross(tangent, binormal));
+	float3 worldNormal = normalize(mul(objectNormal, (float3x3)modelWorld));
 
 	float4 worldPos = mul(pos, modelWorld);
 	float4 viewPos = mul(worldPos, view);
 	float4 projPos = mul(viewPos, projection);
 
-	float3 worldNormal = normalize(mul(float4(objectNormal, 0.0f), modelWorld).xyz);
 
 	output.position = projPos;
 	output.color = float4(input.vColor, 1.0f);
 	output.texCoord = input.texCoord;
 	output.normal = float4(worldNormal, 0.0f);
 	output.cameraPosition = cameraPosition;
-
+	output.cameraForward = normalize(float4(viewInverted[2][0], viewInverted[2][1], viewInverted[2][2], viewInverted[2][3]));
 	return(output);
 }

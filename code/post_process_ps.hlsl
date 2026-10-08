@@ -25,7 +25,8 @@ cbuffer fog : register(b0)
 cbuffer transforms : register(b1)
 {
 	float4x4 invViewProj;
-	float4 cameraWorldPos;	
+	float4 cameraWorldPos;
+	float4 sunDirection;
 };
 
 //Convert our non-linear depth buffer value back to physical world distance
@@ -69,6 +70,7 @@ float4 PS(VS_OUTPUT input) : SV_TARGET
 	}
 	float distance = GetLinearDepth(input.texCoord);
 	float3 pixelWorldPos = GetWorldPosition(input.texCoord);
+
 
 	float cameraHeight = cameraWorldPos.y;
 	float pixelHeight = pixelWorldPos.y;

@@ -5,6 +5,7 @@ struct PS_INPUT
 	float2 tex : TEXCOORD0;
 	float4 normal : NORMAL0;
 	float4 cameraPosition : NORMAL1;
+	float4 cameraForward : FORWARD;
 };
 
 struct PS_OUTPUT
@@ -18,6 +19,34 @@ cbuffer GlobalSun : register(b0)
 	float4 sunLocation;
 }
 
+cbuffer Transforms : register(b1)
+{
+	float4x4 invView;
+}
+
+struct directional_output
+{
+	float3 diffuse;
+	float3 specular;
+};
+
+directional_output ComputeDirectionalLight(float3 toEye, float3 inRGB, float3 lightSpec, float4 surfaceNormal)
+{
+	directional_output result = {float3(0.0f, 0.0f, 0.0f), float3(0.0f, 0.0f, 0.0f)};
+	float4 lightVec = -sunNormal;
+	float diffuseFactor = dot(lightVec, surfaceNormal);
+
+	if (diffuseFactor > 0.0f)
+	{
+		float4 v = reflect(-lightVec, surfaceNormal);
+		float specExp = 10.0f;
+		float specFactor = pow(max(dot(v.xyz, toEye), 0.0f), 10.0f);
+		result.diffuse = diffuseFactor * inRGB * lightSpec;
+		result.specular = specFactor * specExp * lightSpec;
+	}
+	return(result);
+}
+
 PS_OUTPUT main(PS_INPUT In)
 {
 	PS_OUTPUT output;
@@ -26,11 +55,12 @@ PS_OUTPUT main(PS_INPUT In)
 	float3 L = normalize(-sunNormal.xyz);
 
 	float nDotL = saturate(dot(N, L));
-	float3 sunColor = float3(0.8f, 0.8f, 0.8f);
+	float3 sunColor = float3(0.1f, 0.1f, 0.1f);
 	float3 diffuse = In.color.rgb * nDotL * sunColor;
-	float3 V = normalize(In.cameraPosition.xyz - In.position.xyz);	
+	float3 V = normalize(In.cameraPosition.xyz - In.position.xyz);
 
-#if 1
+
+
 
 	float3 H = normalize(V + L);
 	float nDotH = saturate(dot(N, H));
@@ -40,15 +70,11 @@ PS_OUTPUT main(PS_INPUT In)
 	float3 specular = pow(nDotH, specExp) * sunSpecColor;
 	specular *= (nDotL > 0.0f ? 1.0f : 0.0f);
 
-//	output.RGBColor = float4(In.color.rgb * nDotL + specular, In.color.a);
-	float3 ambient = In.color.rgb * 0.1f;
-	output.RGBColor = float4(ambient + diffuse + specular, In.color.a);
 
-#else
-	float3 H = normalize(V + L);
-	float specExp = 10.0f;
-	float specular = pow(saturate(dot(N, H)), specExp);
-	output.RGBColor = float4(In.color.rgb * nDotL + specular, In.color.a);
-#endif
+
+	float3 ambient = In.color.rgb * 0.1f;
+	output.RGBColor = float4((ambient + diffuse + specular), In.color.a);
+
+
 	return(output);
 }

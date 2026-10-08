@@ -136,6 +136,7 @@ struct alignas(16) post_process_transforms_constants
 {
     DirectX::XMMATRIX invViewProj;
     DirectX::XMVECTOR cameraWorldPos;
+    DirectX::XMVECTOR sunDir;
 };
 
 struct sail_constant_buffers
