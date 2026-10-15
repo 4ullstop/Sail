@@ -20,7 +20,6 @@ cbuffer GlobalSun : register(b0)
 {
 	float4 sunNormal;
 	float3 sunColor;
-	float lightIntensity;
 }
 
 cbuffer Transforms : register(b1)

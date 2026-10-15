@@ -87,7 +87,6 @@ struct global_lighting
 {
     DirectX::XMVECTOR lightNormal;
     DirectX::XMVECTOR lightColor;
-    r32 lightIntensity;
 };
 
 struct ocean_buffers

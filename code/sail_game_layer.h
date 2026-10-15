@@ -3,8 +3,9 @@
 #include "D:/ExternalCustomAPIs/Game/code/game_framework_dll_include.h"
 #include "D:/ExternalCustomAPIs/MemoryPools/code/memory_pool_dll_include.h"
 #include "D:/ExternalCustomAPIs/OBJLoader/code/obj_parser_dll_include.h"
+#include "scripting.h"
 #include "sail_data_collection.h"
-#include "scripted_events.h"
+
 
 #if defined(_MSC_VER)
 #define GAME_CALL __vectorcall
@@ -22,6 +23,47 @@ enum e_weather_level : u8
     ewl_4 = 8,
 };
 
+enum static_cam_location
+{
+    scl_center,
+    scl_left,
+    scl_right
+};
+
+struct ui_element
+{
+    texture* uiTexture;
+    ui_update* uiInfo;
+    bool32 beenShown;
+    bool32 tutorial;
+};
+
+struct hud
+{
+    union
+    {
+	ui_element uiElements[10];
+	struct
+	{
+	    ui_element rightBumper;
+	    ui_element leftBumper;
+
+	    ui_element leftStick;
+	    ui_element rightStick;
+
+	    ui_element map;
+	    ui_element mapPlayer;
+
+	    ui_element boatDir;
+	    ui_element windDir;
+	    ui_element compass;
+
+	    ui_element terminator;
+	};
+    };
+};
+
+
 struct game_state
 {
     tutorial_data tutorialData;
@@ -29,6 +71,8 @@ struct game_state
     u8 weatherLevel;
     u8 newWeatherLevel;
     spawned_obj_info* skybox;
+    hud* gameHUD;
+    static_cam_location currentCamLocation;
 };
 
 enum sail_orientation
@@ -101,13 +145,7 @@ struct sailing
     rotational_update windRotation; //put this in when finished refactoring
     r32 windSpeed;
     sail_type mainSail;
-};
-
-enum static_cam_location
-{
-    scl_center,
-    scl_left,
-    scl_right
+    bool32 windInRotation;
 };
 
 enum boat_cam_mode
@@ -269,7 +307,6 @@ struct boat_entity
     v4 vOutput;
 };
 
-
 struct joystick_rotation
 {
     v2 stickAverage;
@@ -332,7 +369,7 @@ typedef SAIL_UPDATE(sail_update);
 //replace sail_initialize_data w/ game_camera, put sail_initialize_data as pointer and make it a magic function
 //otherwise we have to worry about everything in this sail_intialize_data struct to be alignas(16) and that's too
 //much work
-#define SAIL_INITIALIZE(name) game_camera GAME_CALL name(sail_initialize_data* initData, game_framework_dll_code* gameFrameworkCode, memory_pool_dll_code* memoryPoolCode, platform_info* platformInfo, program_memory* pgMem)
+#define SAIL_INITIALIZE(name) game_camera GAME_CALL name(sail_initialize_data* initData, game_framework_dll_code* gameFrameworkCode, memory_pool_dll_code* memoryPoolCode, platform_info* platformInfo, program_memory* pgMem, hud* gameHUD)
 typedef SAIL_INITIALIZE(sail_initialize);
 
 #define SAIL_GAME_LAYER_H

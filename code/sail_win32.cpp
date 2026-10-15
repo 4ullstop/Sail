@@ -1,5 +1,9 @@
 #include "sail_win32.h"
 
+
+global_variable r32 screenWidth = 1280;
+global_variable r32 screenHeight = 720;
+
 #include "sail_game_layer.h"
 #include <windows.h>
 #include <stdio.h>
@@ -50,10 +54,6 @@ global_variable ID3D11SamplerState* uiTextureSamplerState;
 global_variable ID3D11DepthStencilState* disableDepthState;
 global_variable ID3D11BlendState* alphaBlendState;
 global_variable ID3D11Buffer* uiIndexBuffer;
-
-global_variable r32 screenWidth = 1280;
-global_variable r32 screenHeight = 720;
-
 
 global_variable memory_pool_dll_code memoryPoolCode;
 global_variable win32_arenas* programArenas;
@@ -550,52 +550,6 @@ GetDrawBuffersFromSpawnable(win32_spawnable_objs* win32Objs, spawned_obj_info* i
     return(result);
 }
 
-
-internal void
-UIToNDC(ui_update* update, ui_vertex* result)
-{
-    v2 topLeft = update->position;
-    v2 topRight = {update->position.x + update->size.x, update->position.y};
-    v2 bottomLeft = {update->position.x, update->position.y + update->size.y};
-    v2 bottomRight = {update->position.x + update->size.x, update->position.y + update->size.y};
-
-    //TopLeft
-    //NDCx
-    result[0].position[0] = ((2 * topLeft.x) / screenWidth) - 1.0f;
-    //NDCy
-    result[0].position[1] = 1.0f - ((2 * topLeft.y) / screenHeight);
-
-    //TopRight
-    //NDCx
-    result[1].position[0] = ((2 * topRight.x) / screenWidth) - 1.0f;
-    //NDCy
-    result[1].position[1] = 1.0f - ((2 * topRight.y) / screenHeight);
-
-    //BottomLeft
-    //NDCx
-    result[2].position[0] = ((2 * bottomLeft.x) / screenWidth) - 1.0f;
-    //NDCy
-    result[2].position[1] = 1.0f - ((2 * bottomLeft.y) / screenHeight);
-
-    //BottomRight
-    //NDCx
-    result[3].position[0] = ((2 * bottomRight.x) / screenWidth) - 1.0f;
-    //NDCy
-    result[3].position[1] = 1.0f - ((2 * bottomRight.y) / screenHeight);
-
-    result[0].uv[0] = 0.0f;
-    result[0].uv[1] = 0.0f;    
-
-    result[1].uv[0] = 1.0f;
-    result[1].uv[1] = 0.0f;    
-
-    result[2].uv[0] = 0.0f;
-    result[2].uv[1] = 1.0f;    
-
-    result[3].uv[0] = 1.0f;
-    result[3].uv[1] = 1.0f;    
-}
-
 internal void
 Render2D(shaders* shader, win32_spawnable_objs* win32Objs)
 {
@@ -625,13 +579,15 @@ Render2D(shaders* shader, win32_spawnable_objs* win32Objs)
 	    if (texture->uiInfo->wasUpdated)
 	    {
 		ui_vertex newVerts[4];
-		UIToNDC(texture->uiInfo, newVerts);
+//		UIToNDC(texture->uiInfo, newVerts);
 		for (i32 j = 0; j < ArrayCount(newVerts); j++)
 		{
 		    for (i32 k = 0; k < ArrayCount(newVerts[j].position); k++)
 		    {
-			texture->uiVertexBufferData[j].position[k] = newVerts[j].position[k];
-			texture->uiVertexBufferData[j].uv[k] = newVerts[j].uv[k];
+
+			texture->uiVertexBufferData[j].position[k] = texture->uiInfo->ndcInfo[j].position[k];
+			texture->uiVertexBufferData[j].uv[k] = texture->uiInfo->ndcInfo[j].uv[k];
+
 		    }
 		}
 
@@ -767,7 +723,7 @@ Render(game_loaded_objs* gameObjs, win32_spawnable_objs* win32Objs, sail_constan
 	{
 	    draw_buffers* drawBuffers = GetDrawBuffersFromSpawnable(win32Objs, objInfo);
 	    context->VSSetConstantBuffers(1, 1, &cBuffers->dynamicVBuffer);
-	    context->PSSetConstantBuffers(1, 1, &cBuffers->sunBuffer);
+
 	    /*
 	      Update vertex position color to have MATERIAL_ID and update InputDescription to include this too
 	      Then Create a material Properties to represent the structue of a material,
@@ -807,7 +763,7 @@ Render(game_loaded_objs* gameObjs, win32_spawnable_objs* win32Objs, sail_constan
 		storedMatData = DirectX::XMVectorSetZ(storedMatData, (r32)1.0f);
 	    }
 	    context->PSSetConstantBuffers(0, 1, &cBuffers->dynamicPBuffer);
-
+	    context->PSSetConstantBuffers(1, 1, &cBuffers->sunBuffer);
 	    hr = context->Map(cBuffers->dynamicPBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
 	    material_constants* matData = (material_constants*)mapped.pData;
 
@@ -1043,8 +999,9 @@ int CALLBACK WinMain(HINSTANCE hInstance,
 
     platformInfo.parseObjCode = &parseObjCode;
 
+    hud gameHUD = {};
     sail_initialize_data sailInitData = {};
-    game_camera gameCamera = SailInitialize(&sailInitData, &gameFrameworkCode, &memoryPoolCode, &platformInfo, &memory);
+    game_camera gameCamera = SailInitialize(&sailInitData, &gameFrameworkCode, &memoryPoolCode, &platformInfo, &memory, &gameHUD);
     
     D3D_FEATURE_LEVEL levels[] = {
 	D3D_FEATURE_LEVEL_11_1,
@@ -1108,9 +1065,11 @@ int CALLBACK WinMain(HINSTANCE hInstance,
 
 
     global_lighting sun = {};
-    sun.lightNormal = DirectX::XMVectorSet(0.0f, -1.0f, 0.0f, 0.0f);
-    sun.lightColor = DirectX::XMVectorSet(0.1f, 0.1f, 0.1f, 0.0f);
-    sun.lightIntensity = 10.0f;
+    v4 sunForward = GetForwardVector(-45.0f, 0.0f);
+    sun.lightNormal = win32Code.Win32FromV4ToXMVECTOR(sunForward);
+//	DirectX::XMVectorSet(0.0f, -1.0f, 0.0f, 0.0f);
+    sun.lightColor = DirectX::XMVectorSet(0.6f, 0.2f, 0.1f, 10.0f);
+
     
     ocean oceanGrid = CreateOceanGrid(platformInfo.frameworkArenas.setupArena);
     ocean_buffers oceanBuffers = CreateOceanBuffers(&oceanGrid);
@@ -1523,7 +1482,7 @@ int CALLBACK WinMain(HINSTANCE hInstance,
 	    rid[0].hwndTarget = window;
 
 	    game_state gameState = {};
-
+	    gameState.gameHUD = &gameHUD;
 	    
 	    if (RegisterRawInputDevices(rid, 1, sizeof(rid[0])) == FALSE)
 	    {

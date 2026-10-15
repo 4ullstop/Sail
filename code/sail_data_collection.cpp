@@ -2,15 +2,19 @@
 
 
 internal void
-RunPlayerTutorial(game_state* gameState, sailing* sailInfo)
+RunPlayerTutorial(game_state* gameState, sailing* sailInfo, boat_entity* boat)
 {
     switch(gameState->tutorialData.tutorialState)
     {
     case ts_sideToSide:
     {
-	if (gameState->tutorialData.movedToSides)
-	    gameState->tutorialData.tutorialState = ts_upToSpeed;
 
+	ScriptTutorial(&gameState->tutorialData, gameState, boat);
+	if (gameState->tutorialData.uiTutorialComplete)
+	{
+	    gameState->tutorialData.tutorialState = ts_upToSpeed;
+	}
+	
     } break;
     case ts_upToSpeed:
     {
@@ -30,9 +34,7 @@ RunPlayerTutorial(game_state* gameState, sailing* sailInfo)
 	if (!gameState->tutorialData.windChanged)
 	{
 	    r32 randomRotation = RandomNumberBetween(15.0f, 90.0f);
-	    sailInfo->windRotation.eTargetRotations = AddTargetYawRotation(randomRotation,
-									   sailInfo->windRotation.eTargetRotations);
-
+	    RotateWindDirection(sailInfo, randomRotation);
 	    gameState->tutorialData.windChangeAmount++;
 	    gameState->tutorialData.windChanged = true;
 	    gameState->tutorialData.timeSpentInState = 0.0f;
@@ -59,3 +61,4 @@ RunPlayerTutorial(game_state* gameState, sailing* sailInfo)
     } break;
     }
 }
+
