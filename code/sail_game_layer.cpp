@@ -30,15 +30,14 @@ global_variable v2 screenDimensions = {screenWidth, screenHeight};
 #define STARTFREECAM 0
 #define CAMMOVESPEED 50.0f;
 
-
 internal v2
 RotateUVR(v2 uv, r32 angleR)
 {
     v2 pivot = {0.5f, 0.5f};
     v2 delta = uv - pivot;
 
-    r32 u = (r32)(delta.x * cos(angleR) - delta.y * sin(angleR));
-    r32 v = (r32)(delta.x * sin(angleR) + delta.y * cos(angleR));
+    r32 u = (r32)((delta.x * cos(angleR)) - (delta.y * sin(angleR)));
+    r32 v = (r32)((delta.x * sin(angleR)) + (delta.y * cos(angleR)));
 
     v2 result = {u, v};
     result += pivot;
@@ -56,7 +55,9 @@ ApplyRotationToUI(ui_update* uiUpdate, r32 inRotD)
 {
     for (i32 i = 0; i < 4; i++)
     {
-	v2 uv = {uiUpdate->ndcInfo[i].uv[0], uiUpdate->ndcInfo[i].uv[1]};
+	v2 uv = {uiUpdate->ndcBaseInfo[i].uv[0], uiUpdate->ndcBaseInfo[i].uv[1]};
+	r32 truncAngle = (r32)RAD2DEG(inRotD);
+	truncAngle = truncf(truncAngle / 100.0f) / 100.0f;
 	v2 rotatedUV = RotateUVD(uv, inRotD);
 	uiUpdate->ndcInfo[i].uv[0] = rotatedUV.x;
 	uiUpdate->ndcInfo[i].uv[1] = rotatedUV.y;	
@@ -1872,8 +1873,11 @@ extern "C" SAIL_UPDATE(SailUpdate)
 	    v4 windModelOffset = {-0.4f, 0.3f, 1.8f, 0.0f};	    
 
 	    v4 boatForwardRots = GetEulerFromForwardD(boat->forward);
-	    r32 angle = SignedAngleBetweenTwoVectorsDegrees(boatXZ, north);
-	    ApplyRotationToUI(gameState->gameHUD->boatDir.uiInfo, angle);	    
+	    r32 boatNorth = SignedAngleBetweenTwoVectorsDegrees(boatXZ, -north);
+	    ApplyRotationToUI(gameState->gameHUD->boatDir.uiInfo, boatNorth);
+	    r32 windNorth = SignedAngleBetweenTwoVectorsDegrees(windXZ, -north);
+	    
+	    ApplyRotationToUI(gameState->gameHUD->windDir.uiInfo, windNorth);
 	    //boat forward and world forward
 	    boat->windModelTop->modelMatrix = ComputeObjectRotationForForward(boatXZ,
 									      north,
