@@ -550,8 +550,131 @@ GetDrawBuffersFromSpawnable(win32_spawnable_objs* win32Objs, spawned_obj_info* i
     return(result);
 }
 
+struct uv_offset_result
+{
+    v2 lowUV;
+    v2 highUV;
+};
+
+
+internal uv_offset_result
+UVOffsetForCharacter(char character, text_atlas_info* textAtlas)
+{
+    uv_offset_result result = {};
+    i32 ch = character - '0';
+
+    i32 textureIndex = 0;
+    if (ch >= 65)
+    {
+	textureIndex = MapValue(textAtlas->charRange, textAtlas->asciiCharRange, ch);
+    }
+    else
+    {
+	textureIndex = MapValue(textAtlas->numRange, textAtlas->asciiNumRange, ch);
+	textureIndex++;
+    }
+
+
+    Assert(textAtlas->refWidth == textAtlas->refHeight); //rn too lazy this should be the case all times
+    Assert(textAtlas->width == textAtlas->height);
+    i32 lw = textAtlas->refWidth;
+    //these values are currently retrieved in the 1d space, when it should be according to 2d space
+
+    i32 col = textureIndex % textAtlas->columns;
+    i32 row = textureIndex / textAtlas->columns;
+
+    i32 lowU = col * lw;
+    i32 highU = (col + 1) * lw;
+    i32 lowV = row * lw;
+    i32 highV = (row + 1) * lw;
+
+    v2 lowUV = v2{((r32)lowU / (r32)textAtlas->width), ((r32)lowV / (r32)textAtlas->height)};
+    v2 highUV = v2{((r32)highU / (r32)textAtlas->width), ((r32)highV / (r32)textAtlas->height)};
+
+
+
+    //This is still wrong, consider trying to actually make it in the 256 x 256 range as oppposed to cheating 
+
+    
+    result.lowUV = lowUV;
+    result.highUV = highUV;
+    return(result);
+}
+
 internal void
-Render2D(shaders* shader, win32_spawnable_objs* win32Objs)
+AssignNewUVS(ui_vertex* result, uv_offset_result uv, r32 newOffset, ui_vertex* og)
+{
+    result[0].position[0] = og[0].position[0] + newOffset;
+//    result[0].position[1] = og[0].position[1];
+
+    result[1].position[0] = og[1].position[0] + newOffset;
+//    result[1].position[1] = og[1].position[1];
+
+    result[2].position[0] = og[2].position[0] + newOffset;
+//    result[2].position[1] = og[2].position[1];
+
+    result[3].position[0] = og[3].position[0] + newOffset;
+//    result[3].position[1] = og[3].position[1]
+
+    result[0].uv[0] = uv.lowUV.x;
+    result[0].uv[1] = uv.lowUV.y;
+
+    result[1].uv[0] = uv.highUV.x;
+    result[1].uv[1] = uv.lowUV.y;
+
+    result[2].uv[0] = uv.lowUV.x;
+    result[2].uv[1] = uv.highUV.y;
+
+    result[3].uv[0] = uv.highUV.x;
+    result[3].uv[1] = uv.highUV.y;
+}
+
+internal void
+RenderText2D(texture_buffers* texture, hud* gameHUD, shaders* shader)
+{
+    ui_update* uiInfo = texture->uiInfo;
+    for (i32 i = 0; i < uiInfo->textElement.numOfCharacters; i++)
+    {
+	context->OMSetDepthStencilState(disableDepthState, 0);
+	context->OMSetBlendState(alphaBlendState, NULL, 0xFFFFFFFF);
+
+	context->VSSetShader(shader->uiVertexShader, nullptr, 0);
+	context->IASetInputLayout(shader->uiInputLayout);	
+	context->PSSetShader(shader->uiPixelShader, nullptr, 0);
+	context->PSSetShaderResources(0, 1, &texture->textureResourceView);
+	context->PSSetSamplers(0, 1, &uiTextureSamplerState);
+
+	context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	
+
+	uv_offset_result uv = UVOffsetForCharacter(uiInfo->textElement.str[i], &gameHUD->textAtlas);
+
+	r32 textSpacing = -10.8f;
+	r32 offsetPos = (r32)((i * (gameHUD->textAtlas.refWidth + textSpacing)) / screenWidth);
+	AssignNewUVS(uiInfo->ndcInfo, uv, offsetPos, uiInfo->ndcBaseInfo);
+
+	for (i32 j = 0; j < 4; j++)
+	{
+	    for (i32 k = 0; k < 2; k++)
+	    {
+		texture->uiVertexBufferData[j].uv[k] = texture->uiInfo->ndcInfo[j].uv[k];
+		texture->uiVertexBufferData[j].position[k] = texture->uiInfo->ndcInfo[j].position[k];
+	    }
+	}
+	context->UpdateSubresource(texture->uiVertexBuffer, 0, nullptr, texture->uiVertexBufferData, 0, 0);
+	UINT stride = sizeof(ui_vertex);
+	UINT offset = 0;
+
+	
+	context->IASetVertexBuffers(0, 1, &texture->uiVertexBuffer, &stride, &offset);
+	context->IASetIndexBuffer(uiIndexBuffer, DXGI_FORMAT_R16_UINT, 0);
+
+	context->DrawIndexed(6, 0, 0);
+    }
+}
+
+internal void
+Render2D(shaders* shader, win32_spawnable_objs* win32Objs, game_state* gameState)
 {
     for (i32 i = 0; i < win32Objs->numOf2DTextures; i++)
     {
@@ -560,47 +683,54 @@ Render2D(shaders* shader, win32_spawnable_objs* win32Objs)
 
 	if (texture->uiInfo->hidden == false)
 	{
-	    context->OMSetDepthStencilState(disableDepthState, 0);
-	    context->OMSetBlendState(alphaBlendState, NULL, 0xFFFFFFFF);
-
-	    context->VSSetShader(shader->uiVertexShader, nullptr, 0);
-	    context->IASetInputLayout(shader->uiInputLayout);	
-	    context->PSSetShader(shader->uiPixelShader, nullptr, 0);
-	    context->PSSetShaderResources(0, 1, &texture->textureResourceView);
-	    context->PSSetSamplers(0, 1, &uiTextureSamplerState);
-
-	    context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-	
 	    UINT stride = sizeof(ui_vertex);
 	    UINT offset = 0;
 
-
-	    //Perform mapping and unmapping here
-	    if (texture->uiInfo->wasUpdated)
+	    if (!texture->uiInfo->isText)
 	    {
-		ui_vertex newVerts[4];
-//		UIToNDC(texture->uiInfo, newVerts);
-		for (i32 j = 0; j < ArrayCount(newVerts); j++)
+		context->OMSetDepthStencilState(disableDepthState, 0);
+		context->OMSetBlendState(alphaBlendState, NULL, 0xFFFFFFFF);
+
+		context->VSSetShader(shader->uiVertexShader, nullptr, 0);
+		context->IASetInputLayout(shader->uiInputLayout);	
+		context->PSSetShader(shader->uiPixelShader, nullptr, 0);
+		context->PSSetShaderResources(0, 1, &texture->textureResourceView);
+		context->PSSetSamplers(0, 1, &uiTextureSamplerState);
+
+		context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	
+
+//Perform mapping and unmapping here
+		if (texture->uiInfo->wasUpdated)
 		{
-		    for (i32 k = 0; k < ArrayCount(newVerts[j].position); k++)
+		    ui_vertex newVerts[4];
+//		UIToNDC(texture->uiInfo, newVerts);
+		    for (i32 j = 0; j < ArrayCount(newVerts); j++)
 		    {
+			for (i32 k = 0; k < ArrayCount(newVerts[j].position); k++)
+			{
 
-			texture->uiVertexBufferData[j].position[k] = texture->uiInfo->ndcInfo[j].position[k];
-			texture->uiVertexBufferData[j].uv[k] = texture->uiInfo->ndcInfo[j].uv[k];
+			    texture->uiVertexBufferData[j].position[k] = texture->uiInfo->ndcInfo[j].position[k];
+			    texture->uiVertexBufferData[j].uv[k] = texture->uiInfo->ndcInfo[j].uv[k];
 
+			}
 		    }
+
+	    
+		    context->UpdateSubresource(texture->uiVertexBuffer, 0, nullptr, texture->uiVertexBufferData, 0, 0);
+	    
+		    texture->uiInfo->wasUpdated = false;
 		}
 
-	    
-		context->UpdateSubresource(texture->uiVertexBuffer, 0, nullptr, texture->uiVertexBufferData, 0, 0);
-	    
-		texture->uiInfo->wasUpdated = false;
-	    }
-
-	    context->IASetVertexBuffers(0, 1, &texture->uiVertexBuffer, &stride, &offset);
-	    context->IASetIndexBuffer(uiIndexBuffer, DXGI_FORMAT_R16_UINT, 0);
+		context->IASetVertexBuffers(0, 1, &texture->uiVertexBuffer, &stride, &offset);
+		context->IASetIndexBuffer(uiIndexBuffer, DXGI_FORMAT_R16_UINT, 0);
 	
-	    context->DrawIndexed(6, 0, 0);	
+		context->DrawIndexed(6, 0, 0);
+	    }
+	    else
+	    {
+		RenderText2D(texture, gameState->gameHUD, shader);
+	    }
 	}
     }
     context->OMSetDepthStencilState(nullptr, 0);
@@ -655,7 +785,7 @@ RenderOcean(ocean* oceanGrid, ocean_buffers* oceanBuffers, shaders* shader, sail
 }
 
 internal void
-Render(game_loaded_objs* gameObjs, win32_spawnable_objs* win32Objs, sail_constant_buffers* cBuffers, shaders* shader, dx_camera* dxCam, ocean_buffers* oceanBuffers, ocean* oceanGrid, global_lighting* sun)
+Render(game_loaded_objs* gameObjs, win32_spawnable_objs* win32Objs, sail_constant_buffers* cBuffers, shaders* shader, dx_camera* dxCam, ocean_buffers* oceanBuffers, ocean* oceanGrid, global_lighting* sun, game_state* gameState)
 {
     //Normal render setup
     r32 teal[] = {0.098f, 0.439f, 1.000f};
@@ -834,7 +964,7 @@ Render(game_loaded_objs* gameObjs, win32_spawnable_objs* win32Objs, sail_constan
     
     
     //Finally render 2d
-    Render2D(shader, win32Objs);
+    Render2D(shader, win32Objs, gameState);
 
     context->OMSetDepthStencilState(nullptr, 0);
     context->OMSetBlendState(nullptr, nullptr, 0xFFFFFFFF);
@@ -1558,7 +1688,7 @@ int CALLBACK WinMain(HINSTANCE hInstance,
 		
 		win32Code.Win32ConvertGameCameraToWin32(&dxCam, &gCamData);
 
-		Render(&sailInitData.gameObjs, &win32Buffers, &sailConstantBuffers, &gameShaders, &dxCam, &oceanBuffers, &oceanGrid, &sun);
+		Render(&sailInitData.gameObjs, &win32Buffers, &sailConstantBuffers, &gameShaders, &dxCam, &oceanBuffers, &oceanGrid, &sun, &gameState);
 
 		swapChain->Present(1, 0);
 

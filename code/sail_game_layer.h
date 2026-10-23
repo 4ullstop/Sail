@@ -38,11 +38,30 @@ struct ui_element
     bool32 tutorial;
 };
 
+struct text_atlas_info
+{
+    i32 refWidth;
+    i32 refHeight;
+
+    i32 width;
+    i32 height;
+
+    i32 columns;
+    i32 rows;
+
+    v2I charRange;
+    v2I numRange;
+
+    v2I asciiCharRange;
+    v2I asciiNumRange;
+};
+
 struct hud
 {
+    text_atlas_info textAtlas;
     union
     {
-	ui_element uiElements[10];
+	ui_element uiElements[13];
 	struct
 	{
 	    ui_element rightBumper;
@@ -58,6 +77,12 @@ struct hud
 	    ui_element windDir;
 	    ui_element compass;
 
+	    ui_element maxSpeed;
+	    ui_element wordAtlas;
+
+	    ui_element speedText;
+
+	    
 	    ui_element terminator;
 	};
     };
@@ -146,6 +171,10 @@ struct sailing
     r32 windSpeed;
     sail_type mainSail;
     bool32 windInRotation;
+
+    v3 eMajorRotation;
+    v3 eMinorRotation;
+
 };
 
 enum boat_cam_mode
@@ -360,6 +389,20 @@ GetForwardVector(r32 pitch, r32 yaw)
     };
 
     result = NormalizeV3(result);
+    return(result);
+}
+
+inline r32
+MapValue(v2 oRange, v2 nRange, r32 value)
+{
+    r32 result = (nRange.x + value) * ((nRange.y - nRange.x) / (oRange.y - oRange.x));
+    return(result);
+}
+
+inline i32
+MapValue(v2I oRange, v2I nRange, i32 value)
+{
+    i32 result = (i32)((oRange.x + value) * ((nRange.y - nRange.x) / (oRange.y - oRange.x)));
     return(result);
 }
 

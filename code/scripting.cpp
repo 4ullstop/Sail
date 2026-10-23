@@ -63,7 +63,7 @@ ScriptTutorial(tutorial_data* data, game_state* gameState, boat_entity* boat)
 		gameHUD->leftStick.uiInfo->hidden = true;
 		data->tutorialUIState = tus_moveRight;
 		gameHUD->rightBumper.uiInfo->hidden = false;
-		RotateWindDirection(&boat->sailInfo, 45.0f);
+		RotateWindDirection(&boat->sailInfo, 45.0f, true);
 		data->windChanged = true;
 	    }
 	}

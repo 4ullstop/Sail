@@ -29,6 +29,62 @@ global_variable v2 screenDimensions = {screenWidth, screenHeight};
 
 #define STARTFREECAM 0
 #define CAMMOVESPEED 50.0f;
+/*
+  UI Text Index Mapping
+  
+  Characters are 0-26,
+  Numbers are 27 - 37
+  IRL:
+  Characters (uppercase) are 65 - 90
+  Numbers are 48 - 57
+
+  Character Map 65-90 : 0-26
+  Number Map 58-57 : 27-37
+  
+ */
+
+internal void
+UpdateTextUI(ui_update* uiInfo, char* str, i32 charCount)
+{
+    uiInfo->isText = true;
+    Assert(charCount <= UI_TEXT_MAX_LEN);
+    for (i32 i = 0; i < charCount; i++)
+    {
+	uiInfo->textElement.str[i] = str[i];
+    }
+    uiInfo->textElement.numOfCharacters = charCount;
+}
+
+internal void
+TextAtlasSetup(hud* HUD)
+{
+    text_atlas_info* textAtlas = &HUD->textAtlas;
+    texture* atlasTexture = HUD->wordAtlas.uiTexture;
+
+    textAtlas->width = 256;
+    textAtlas->height = 256;
+
+    Assert(textAtlas->width == textAtlas->height);
+
+    //idk how to set this up rn w/o hardcoding
+    textAtlas->columns = 8;
+    textAtlas->rows = 8;
+
+    textAtlas->refWidth = textAtlas->width / textAtlas->columns;
+    textAtlas->refHeight = textAtlas->height / textAtlas->rows;
+
+    v2I charRange = {0, 25};
+    v2I numRange = {27, 38};
+
+    v2I asciiCharRange = {65, 90};
+    v2I asciiNumRange = {46, 57};
+
+    textAtlas->charRange = charRange;
+    textAtlas->numRange = numRange;
+
+    textAtlas->asciiCharRange = asciiCharRange;
+    textAtlas->asciiNumRange = asciiNumRange;
+}
 
 internal v2
 RotateUVR(v2 uv, r32 angleR)
@@ -56,8 +112,6 @@ ApplyRotationToUI(ui_update* uiUpdate, r32 inRotD)
     for (i32 i = 0; i < 4; i++)
     {
 	v2 uv = {uiUpdate->ndcBaseInfo[i].uv[0], uiUpdate->ndcBaseInfo[i].uv[1]};
-	r32 truncAngle = (r32)RAD2DEG(inRotD);
-	truncAngle = truncf(truncAngle / 100.0f) / 100.0f;
 	v2 rotatedUV = RotateUVD(uv, inRotD);
 	uiUpdate->ndcInfo[i].uv[0] = rotatedUV.x;
 	uiUpdate->ndcInfo[i].uv[1] = rotatedUV.y;	
@@ -203,13 +257,6 @@ LerpUpdateRotationsYaw(rotational_update* inRots)
 	    inRots->eStartRotations = inRots->eCurrentRotations;
 	}
     }
-}
-
-inline r32
-MapValue(v2 oRange, v2 nRange, r32 value)
-{
-    r32 result = (nRange.x + value) * ((nRange.y - nRange.x) / (oRange.y - oRange.x));
-    return(result);
 }
     
 #define PADSENS 2.0f
@@ -602,14 +649,21 @@ CalculateCameraLocation(game_camera* camera, boat_entity* boat)
 }
 
 internal void
-RotateWindDirection(sailing* sailInfo, r32 rotation)
+RotateWindDirection(sailing* sailInfo, r32 rotation, bool32 isMajorChange)
 {
-
-
-	
-	sailInfo->windRotation.eTargetRotations = AddTargetYawRotation(rotation,
-								       sailInfo->windRotation.eTargetRotations);
-
+	if (isMajorChange)
+	{
+	    sailInfo->eMajorRotation = AddTargetYawRotation(rotation,
+							       sailInfo->windRotation.eTargetRotations);
+	    sailInfo->windRotation.eTargetRotations = sailInfo->eMajorRotation;
+	    sailInfo->eMinorRotation = sailInfo->eMajorRotation;
+	}
+	else
+	{
+	    sailInfo->eMinorRotation = AddTargetYawRotation(rotation,
+							    sailInfo->windRotation.eTargetRotations);
+	    sailInfo->windRotation.eTargetRotations = sailInfo->eMinorRotation;
+	}
 }
 
 inline bool32
@@ -617,6 +671,8 @@ IsInRange(r32 min, r32 max, r32 v)
 {
     return (v < max && v > min);
 }
+
+
 
 internal bool32
 CheckForCompletedRotationUpdate(rotational_update update)
@@ -630,6 +686,26 @@ CheckForCompletedRotationUpdate(rotational_update update)
     {
 	return (false);
     }
+}
+
+internal void
+AddWindVariance(sailing* sailInfo)
+{
+    r32 minorMajorDifference = sailInfo->eMajorRotation.yaw - sailInfo->eMinorRotation.yaw;
+    i32 sign = 0;
+    //trying not to stray too far away from the current rotation
+    if (minorMajorDifference > 5.0f)
+    {
+	sign = -1;
+    }
+    else if (minorMajorDifference < -5.0f)
+    {
+	sign = 1;
+    }
+	
+    r32 randomRotation = RandomNumberBetween(0.4f, 1.0f);
+    randomRotation *= (r32)sign;
+    RotateWindDirection(sailInfo, randomRotation, false);
 }
 
 //External calls
@@ -723,8 +799,11 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
     texture_load_info compassUI = {"../data/textures/hud/compass_ui.bmp", true};
     texture_load_info boatDirUI = {"../data/textures/hud/boat_dir_ui.bmp", true};
     texture_load_info windDirUI = {"../data/textures/hud/wind_dir_ui.bmp", true};
+    texture_load_info maxSpeedUI = {"../data/textures/max_speed.bmp", true};
+    texture_load_info wordTextureAtlasUI = {"../data/textures/alphabet_texture_atlas.bmp", true};
+    texture_load_info wordSpeedUI = {"../data/textures/hud/speed_word.bmp", true};
     
-    texture_load_info allTextureInfo[15] = {testPathLoadInfo, windModelTexInfo, speedometerTexInfo, boatTexInfo, uiMap, uiBoat, leftSailTut, rightSailTut, skyboxCubemap, sunImg, lbTut, rbTut, compassUI, boatDirUI, windDirUI};
+    texture_load_info allTextureInfo[18] = {testPathLoadInfo, windModelTexInfo, speedometerTexInfo, boatTexInfo, uiMap, uiBoat, leftSailTut, rightSailTut, skyboxCubemap, sunImg, lbTut, rbTut, compassUI, boatDirUI, windDirUI, maxSpeedUI, wordTextureAtlasUI, wordSpeedUI};
     
 
     //Yes yes this is bad practice
@@ -732,7 +811,7 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
     initData->gameTextures = gameFrameworkCode->GameLoadTextures(allTextureInfo,
 								 platformInfo->frameworkArenas.setupArena,
 								 platformInfo->frameworkArenas.perFrameArena,
-								 15,
+								 18,
 								 screenDimensions,
 								 DEBUGPlatformReadEntireFile,
 								 memoryPoolCode);
@@ -762,7 +841,7 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
     gameHUD->leftStick.uiInfo = &initData->gameTextures.textures[tl_ui_left_tut - 1].uiInfo;
     gameHUD->leftStick.uiInfo->hidden = true;
     
-//    initData->gameTextures.textures[tl_ui_left_tut - 1].uiInfo.hidden = true;
+
     gameFrameworkCode->GameUpdateUITexture(tutSize,
 					   rbTutLoc,
 					   &initData->gameTextures.textures[tl_ui_right_tut - 1].uiInfo,
@@ -818,13 +897,54 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
     gameHUD->windDir.uiTexture = &initData->gameTextures.textures[tl_wind_dir_ui - 1];
     gameHUD->windDir.uiInfo = &initData->gameTextures.textures[tl_wind_dir_ui - 1].uiInfo;
 
+    v2 maxSpeedSize = {100.0f, 100.0f};
+    maxSpeedSize *= 0.8f;
+    v2 maxSpeedLoc = {screenWidth - 75.0f, screenHeight - 80.0f};
+    gameFrameworkCode->GameUpdateUITexture(maxSpeedSize,
+					   maxSpeedLoc,
+					   &initData->gameTextures.textures[tl_maxspeed_ui - 1].uiInfo,
+					   screenDimensions);
+    gameHUD->maxSpeed.uiTexture = &initData->gameTextures.textures[tl_maxspeed_ui - 1];
+    gameHUD->maxSpeed.uiInfo = &initData->gameTextures.textures[tl_maxspeed_ui - 1].uiInfo;
+    gameHUD->maxSpeed.uiInfo->hidden = true;
+    
+    v2 wordAtlasSize = {256.0f, 256.0f};
+    wordAtlasSize *= 0.8f;
+    v2 wordAtlasLoc = {0.0f, 0.0f};
+    gameFrameworkCode->GameUpdateUITexture(wordAtlasSize,
+					   wordAtlasLoc,
+					   &initData->gameTextures.textures[tl_wordatlas_ui - 1].uiInfo,
+					   screenDimensions);
+    gameHUD->wordAtlas.uiTexture = &initData->gameTextures.textures[tl_wordatlas_ui - 1];
+    gameHUD->wordAtlas.uiInfo = &initData->gameTextures.textures[tl_wordatlas_ui - 1].uiInfo;
     
     v4 spawnObjLoc = v4{0.0f, 0.0f, 10.0f, 1.0f};
     v4 oneScale = {1.0f, 1.0f, 1.0f, 1.0f};
 
     v4 axesRot = {1.0f, 0.0f, 0.0f, 0.0f};
 
+    v2 speedTextLocation = {screenWidth - 100.0f, screenHeight - 50.0f};
+    v2 speedTextSize = {32.0f, 32.0f};
+    speedTextSize *= 0.5f;
+    
+    gameFrameworkCode->GameUpdateUITexture(speedTextSize,
+					   speedTextLocation,
+					   &initData->gameTextures.textures[tl_wordatlas_ui - 1].uiInfo,
+					   screenDimensions);
+    gameHUD->speedText.uiTexture = &initData->gameTextures.textures[tl_wordatlas_ui - 1];
+    gameHUD->speedText.uiInfo = &initData->gameTextures.textures[tl_wordatlas_ui - 1].uiInfo;
 
+    char* speedText = "0.1";
+    UpdateTextUI(gameHUD->speedText.uiInfo, speedText, 3);
+
+    v2 wordSpeedSize = {100.0f, 100.0f};
+    v2 wordSpeedLocation = {screenWidth - 200.0f, screenHeight - 92.0f};
+    gameFrameworkCode->GameUpdateUITexture(wordSpeedSize,
+					   wordSpeedLocation,
+					   &initData->gameTextures.textures[tl_wordspeed_ui - 1].uiInfo,
+					   screenDimensions);
+
+    
     transform sunTransform = {};
     sunTransform.location = {100.0f, 10.0f, 0.0f};
     sunTransform.rotation = QuaternionIdentity();
@@ -838,7 +958,8 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
 					   false,
 					   Identity());
     initData->theSun->unlit = true;
-    
+
+    TextAtlasSetup(gameHUD);
     
     transform maroonedTransform = {};
     maroonedTransform.location = {0.0f, 0.0f, -50.0f};
@@ -987,8 +1108,10 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
     v4 mastLocation = {0.0f, 0.0f, -1.0f, 1.0f};
     initData->boat.sailInfo = {};    
     initData->boat.sailInfo.mainSail.locationOffset = mastLocation;
+
     initData->boat.sailInfo.mainSail.startRot = 
 	initData->boat.sailInfo.mainSail.qTargetRot = QuaternionIdentity();
+    RotateWindDirection(&initData->boat.sailInfo, 0.0f, true);
 
     transform mastTransform = {};
     mastTransform.location = mastLocation;
@@ -1657,6 +1780,21 @@ extern "C" SAIL_UPDATE(SailUpdate)
 
 	    r32 velocity = boat->movementSpeed * deltaTime;
 
+	    char tempText[32];
+	    snprintf(tempText, sizeof(tempText), "%f", boat->movementSpeed);
+	    UpdateTextUI(gameState->gameHUD->speedText.uiInfo, tempText, 3);
+
+	    AddWindVariance(&boat->sailInfo);
+	    
+	    if (boat->movementSpeed >= boat->topSpeed - 0.2f)
+	    {
+		gameState->gameHUD->maxSpeed.uiInfo->hidden = false;
+	    }
+	    else
+	    {
+		gameState->gameHUD->maxSpeed.uiInfo->hidden = true;
+	    }
+	    
 	    wind_sock* windSock = &boat->windSock;
 
 	    DebugInputs(controller, padController, boat, gameState);

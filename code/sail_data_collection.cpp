@@ -34,7 +34,7 @@ RunPlayerTutorial(game_state* gameState, sailing* sailInfo, boat_entity* boat)
 	if (!gameState->tutorialData.windChanged)
 	{
 	    r32 randomRotation = RandomNumberBetween(15.0f, 90.0f);
-	    RotateWindDirection(sailInfo, randomRotation);
+	    RotateWindDirection(sailInfo, randomRotation, true);
 	    gameState->tutorialData.windChangeAmount++;
 	    gameState->tutorialData.windChanged = true;
 	    gameState->tutorialData.timeSpentInState = 0.0f;
