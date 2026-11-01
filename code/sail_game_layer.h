@@ -164,6 +164,23 @@ struct rotational_update
     bool32 resetStartRotation;
 };
 
+
+struct timer
+{
+    r32 time;
+    bool32 running;
+    r32 endTime;
+};
+
+struct variance
+{
+    v3 eMajorRotations;
+    v3 eMinorRotations;
+    r32 varianceAmount;
+    r32 diffMaxMin;
+    bool32 varianceInit;
+};
+
 struct sailing
 {
     v4 windDirection;
@@ -174,6 +191,11 @@ struct sailing
 
     v3 eMajorRotation;
     v3 eMinorRotation;
+    bool32 varianceInit;
+    
+    timer windVarTimer;
+
+    variance windVariance;
 
 };
 
@@ -181,13 +203,6 @@ enum boat_cam_mode
 {
     bcm_steer,
     bcm_winch
-};
-
-struct timer
-{
-    r32 time;
-    bool32 running;
-    r32 endTime;
 };
 
 struct wind_sock
@@ -297,6 +312,8 @@ struct boat_entity
     v3 angularVelocity;
 
     r32 currTargetYaw;
+    r32 varianceTargetYaw;
+
     
     r32 currRotTime;
     r32 lerpTimeSpeed;
@@ -334,6 +351,11 @@ struct boat_entity
     i32 output;
     r32 rOutput;
     v4 vOutput;
+
+    variance rotationVariance;
+    timer boatRotationTimer;
+
+    rotational_update rotationUpdate;
 };
 
 struct joystick_rotation

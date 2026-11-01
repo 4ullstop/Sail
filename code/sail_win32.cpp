@@ -1671,8 +1671,8 @@ int CALLBACK WinMain(HINSTANCE hInstance,
 		    
 		
 		char normalBoat[256];
-		sprintf_s(normalBoat, sizeof(normalBoat), "Wave Level: %i\n",
-			  gameState.weatherLevel);
+		sprintf_s(normalBoat, sizeof(normalBoat), "BoatRot TargetYaw: %f\n",
+			  boat->rOutput);
 
 				
 		

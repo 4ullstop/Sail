@@ -29,6 +29,7 @@ global_variable v2 screenDimensions = {screenWidth, screenHeight};
 
 #define STARTFREECAM 0
 #define CAMMOVESPEED 50.0f;
+#define PLAYTUTORIAL 0
 /*
   UI Text Index Mapping
   
@@ -607,13 +608,14 @@ UpdateBoatVectors(boat_entity* boat)
     }
 
     //higher number == move forgivness in sail rotation
-    s = CalculateSmoothDropOff(boat->sailAngle, targetRange, 12);
+    i32 forgivenessLevel = 5;
+    s = CalculateSmoothDropOff(boat->sailAngle, targetRange, (r32)forgivenessLevel);
 
     r32 p = 0.0f;
     if (boat->movementDirection == bmd_waves)
     {
-	s = CalculateSmoothDropOff(boat->windAngle, 0.0f, 12);
-	p = Lerp(0.0f, 0.2f, s);
+	s = CalculateSmoothDropOff(boat->windAngle, 0.0f, (r32)forgivenessLevel);
+	p = Lerp(0.0f, 0.4f, s);
     }
     else
     {
@@ -689,24 +691,93 @@ CheckForCompletedRotationUpdate(rotational_update update)
 }
 
 internal void
-AddWindVariance(sailing* sailInfo)
+InitVariance(variance* inVars, r32 startYaw, r32 varianceAmount, r32 diffMaxMin)
 {
-    r32 minorMajorDifference = sailInfo->eMajorRotation.yaw - sailInfo->eMinorRotation.yaw;
-    i32 sign = 0;
-    //trying not to stray too far away from the current rotation
-    if (minorMajorDifference > 5.0f)
+    inVars->eMajorRotations.yaw = startYaw;
+    inVars->eMinorRotations.yaw = inVars->eMajorRotations.yaw;
+    inVars->varianceInit = true;
+    inVars->varianceAmount = varianceAmount;
+    inVars->diffMaxMin = diffMaxMin;
+}
+
+internal r32
+UpdateVariance(variance* inVars)
+{
+    r32 minorMajorDiff = inVars->eMajorRotations.yaw - inVars->eMinorRotations.yaw;
+    r32 sign = 1.0f;
+    r32 varianceAmount = 3.0f;
+
+	
+    r32 rand = RandomNumberBetween(0.0f, 1.0f);
+    if (rand >= 0.5f)
     {
-	sign = -1;
+	sign = -1.0f;
     }
-    else if (minorMajorDifference < -5.0f)
+    else
     {
-	sign = 1;
+	sign = 1.0f;
     }
 	
-    r32 randomRotation = RandomNumberBetween(0.4f, 1.0f);
-    randomRotation *= (r32)sign;
-    RotateWindDirection(sailInfo, randomRotation, false);
+	
+    if (minorMajorDiff > inVars->diffMaxMin)
+    {
+	sign = 1.0f;
+    }
+    else if (minorMajorDiff < -inVars->diffMaxMin)
+    {
+	sign = -1.0f;
+    }
+
+    r32 rot = inVars->eMajorRotations.yaw + (sign * inVars->varianceAmount);
+    rot -= inVars->eMajorRotations.yaw;
+    return(rot);
 }
+
+internal void
+AddWindVariance(sailing* sailInfo)
+{
+    UpdateTimer(&sailInfo->windVarTimer, 4.0f);
+    if (!sailInfo->windVariance.varianceInit)
+    {
+	InitVariance(&sailInfo->windVariance, sailInfo->windRotation.eCurrentRotations.yaw, 3.0f, 5.0f);
+    }
+
+    if (sailInfo->windVarTimer.running == false)
+    {
+	r32 newWindRotation = UpdateVariance(&sailInfo->windVariance);
+
+	RotateWindDirection(sailInfo, newWindRotation, false);
+	sailInfo->windVarTimer.running = true;
+    }
+
+}
+
+internal void
+CancelRotationVariance(boat_entity* boat)
+{
+    boat->boatRotationTimer.running = true;
+}
+
+internal void
+AddBoatRotationVariance(boat_entity* boat)
+{
+    UpdateTimer(&boat->boatRotationTimer, 3.0f);
+    if (!boat->rotationVariance.varianceInit)
+    {
+	//+- 15 degrees from standard heading, 5 degrees difference on each rotational change
+	InitVariance(&boat->rotationVariance, boat->currRot.y, 10.0f, 30.0f);
+    }
+
+    if (boat->boatRotationTimer.running == false)
+    {
+	r32 newRotation = UpdateVariance(&boat->rotationVariance);
+	//Rotate boat direction
+	//You need to add ability to cancel rotation when player adjusts their course after rotating
+	boat->varianceTargetYaw = boat->currTargetYaw - newRotation;
+	boat->boatRotationTimer.running = true;
+    }
+}
+
 
 //External calls
 
@@ -1784,7 +1855,6 @@ extern "C" SAIL_UPDATE(SailUpdate)
 	    snprintf(tempText, sizeof(tempText), "%f", boat->movementSpeed);
 	    UpdateTextUI(gameState->gameHUD->speedText.uiInfo, tempText, 3);
 
-	    AddWindVariance(&boat->sailInfo);
 	    
 	    if (boat->movementSpeed >= boat->topSpeed - 0.2f)
 	    {
@@ -1920,7 +1990,7 @@ extern "C" SAIL_UPDATE(SailUpdate)
 		    {
 			main->targetYaw = main->targetSailRotations.y - sailTurnSpeed;
 		    }
-
+//		    CancelRotationVariance(boat);
 		    
 		}
 		else if (boat->staticCamLocation == static_cam_location::scl_right)
@@ -1940,11 +2010,20 @@ extern "C" SAIL_UPDATE(SailUpdate)
 		    {
 			main->targetYaw = main->targetSailRotations.y + sailTurnSpeed;
 		    }
+
+//		    CancelRotationVariance(boat);
 		}
 	    }
 
+	    AddWindVariance(&boat->sailInfo);
+	    AddBoatRotationVariance(boat);
+	    r32 varianceSlerp = 0.3f;
+	    r32 addedVariance = Lerp(currYaw, boat->varianceTargetYaw, 1.0f - expf(-deltaTime * varianceSlerp));
 
+	    boat->currTargetYaw = (boat->currTargetYaw - boat->targetBoatRotations.yaw) + addedVariance;
+	    boat->rOutput = boat->currTargetYaw;
 	    boat->targetBoatRotations.yaw = Lerp(currYaw, boat->currTargetYaw, 1.0f - expf(-deltaTime * turnSlerp));
+
 
 
 //	    main->targetSailRotations.yaw = Lerp(currSailYaw, main->targetYaw, 1.0f - expf(-deltaTime * turnSailSlerp));
@@ -1961,6 +2040,8 @@ extern "C" SAIL_UPDATE(SailUpdate)
 							boat->mast->localTransform.location);
 	    
 
+
+	    
 	    ApplyBoatWaveRotations(boat);	
 
 	    UpdateBoatVectors(boat);
@@ -2049,7 +2130,9 @@ extern "C" SAIL_UPDATE(SailUpdate)
 
 
     LerpUpdateRotationsYaw(&boat->sailInfo.windRotation);
-    RunPlayerTutorial(gameState, &boat->sailInfo, boat);    
+
+    if (PLAYTUTORIAL)
+	RunPlayerTutorial(gameState, &boat->sailInfo, boat);    
     boat->sailInfo.windDirection = boat->sailInfo.windRotation.vCurrent;
 
 
