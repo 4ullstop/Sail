@@ -15,6 +15,8 @@
 #define GAME_CALL
 #endif
 
+#define MAXLINECOUNT 16
+
 enum e_weather_level : u8
 {
     ewl_1 = 2,
@@ -36,6 +38,7 @@ struct ui_element
     ui_update* uiInfo;
     bool32 beenShown;
     bool32 tutorial;
+    v2 ndcPos;
 };
 
 struct text_atlas_info
@@ -56,12 +59,27 @@ struct text_atlas_info
     v2I asciiNumRange;
 };
 
+struct ui_cursor
+{
+    v2 pos;
+    ui_element* cursorElement;
+};
+
+struct ui_lines
+{
+    v2 a;
+    v2 b;
+    v2 q;
+};
+
+
+
 struct hud
 {
     text_atlas_info textAtlas;
     union
     {
-	ui_element uiElements[13];
+	ui_element uiElements[14];
 	struct
 	{
 	    ui_element rightBumper;
@@ -72,11 +90,13 @@ struct hud
 
 	    ui_element map;
 	    ui_element mapPlayer;
-
+	    ui_element mapCursor;
+	    
 	    ui_element boatDir;
 	    ui_element windDir;
 	    ui_element compass;
-
+	    ui_element courseDir;
+	    
 	    ui_element maxSpeed;
 	    ui_element wordAtlas;
 
@@ -86,8 +106,24 @@ struct hud
 	    ui_element terminator;
 	};
     };
+
+    //pawns includes the map itself
+    i32 numOfMapPawns;
+    ui_element* mapPawns[3];
+    bool32 mapVisible;
+    ui_cursor cursor;
+
+    ui_lines lines[MAXLINECOUNT];
+    i32 numOfDrawnLines;
+    i32 prevNumOfDrawnLines;
 };
 
+
+enum play_mode
+{
+    epm_play,
+    epm_ui,
+};
 
 struct game_state
 {
@@ -98,6 +134,7 @@ struct game_state
     spawned_obj_info* skybox;
     hud* gameHUD;
     static_cam_location currentCamLocation;
+    play_mode playMode;
 };
 
 enum sail_orientation
@@ -314,6 +351,7 @@ struct boat_entity
     r32 currTargetYaw;
     r32 varianceTargetYaw;
 
+    v4 destLocation; 
     
     r32 currRotTime;
     r32 lerpTimeSpeed;
@@ -356,6 +394,8 @@ struct boat_entity
     timer boatRotationTimer;
 
     rotational_update rotationUpdate;
+
+
 };
 
 struct joystick_rotation
@@ -426,6 +466,16 @@ MapValue(v2I oRange, v2I nRange, i32 value)
 {
     i32 result = (i32)((oRange.x + value) * ((nRange.y - nRange.x) / (oRange.y - oRange.x)));
     return(result);
+}
+
+inline v2
+Map(v2 oRange, v2 nRange, v2 v)
+{
+    v2 result = {};
+    result.x = MapValue(oRange, nRange, v.x);
+    result.y = MapValue(oRange, nRange, v.y);
+    return(result);
+
 }
 
 #define SAIL_UPDATE(name) void GAME_CALL name(game_framework_dll_code* gameFrameworkCode, memory_pool_dll_code* memoryPoolCode, game_input* input, game_camera* camera, r32 gameDeltaTime, sail_initialize_data* initData, game_state* gameState)

@@ -3,6 +3,7 @@
 #include "D:/ExternalCustomAPIs/Math/forty_math_fast.h"
 #include "D:/ExternalCustomAPIs/MemoryPools/code/memory_pool_dll_include.h"
 
+
 struct win32_arenas
 {
     memory_arena InitArena;
@@ -73,6 +74,11 @@ struct shaders
     ID3D11VertexShader* ppVS;
     ID3D11InputLayout* ppIALayout;
     ID3D11PixelShader* ppPS;
+
+
+
+    ID3D11PixelShader* linePixelShader;
+    ID3D11InputLayout* lineShaderInputLayout;
 };
 
 struct alignas(16) ocean_sine_constant
@@ -153,6 +159,16 @@ struct sail_constant_buffers
 
 
     ID3D11Buffer* sunBuffer;
+
+    ID3D11Buffer* lineSegmentBuffers[MAXLINECOUNT];
+};
+
+struct alignas(16) line_segment_constant_buffer
+{
+    DirectX::XMFLOAT2 a;
+    DirectX::XMFLOAT2 b;
+    DirectX::XMFLOAT2 q;
+    DirectX::XMFLOAT4 colorThick; //storing the thickness in the alpha value
 };
 
 #define SAIL_WIN32_H

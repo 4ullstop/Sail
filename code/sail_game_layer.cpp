@@ -107,6 +107,26 @@ RotateUVD(v2 uv, r32 angleD)
     return(RotateUVR(uv, (r32)DEG2RAD(angleD)));
 }
 
+internal v4
+GetDirectionVectorFromTwoPoints(v4 a, v4 b)
+{
+    
+}
+
+internal v3
+GetDirectionVectorFromTwoPoints(v3 a, v3 b)
+{
+
+}
+
+internal v2
+GetDirectionVectorFromTwoPoints(v2 a, v2 b)
+{
+    v2 result = {b.x - a.x, b.y - a.y};
+    result = Normalize(result);
+    return(result);
+}
+
 internal void
 ApplyRotationToUI(ui_update* uiUpdate, r32 inRotD)
 {
@@ -118,6 +138,79 @@ ApplyRotationToUI(ui_update* uiUpdate, r32 inRotD)
 	uiUpdate->ndcInfo[i].uv[1] = rotatedUV.y;	
     }
     uiUpdate->wasUpdated = true;
+}
+
+internal void
+SetMapVisibility(bool32 hidden, hud* gameHUD)
+{
+    for (i32 i = 0; i < gameHUD->numOfMapPawns; i++)
+    {
+	gameHUD->mapPawns[i]->uiInfo->hidden = hidden;
+    }
+    gameHUD->mapVisible = hidden;
+}
+
+
+internal void
+SetMapPawns(hud* gameHUD)
+{
+    gameHUD->numOfMapPawns = 3;
+    gameHUD->mapPawns[0] = &gameHUD->map;
+    gameHUD->mapPawns[1] = &gameHUD->mapPlayer;
+    gameHUD->mapPawns[2] = &gameHUD->mapCursor;
+    
+    SetMapVisibility(true, gameHUD);
+}
+
+internal void
+InitCursor(hud* gameHUD)
+{
+    gameHUD->cursor.cursorElement = &gameHUD->mapCursor;
+    gameHUD->cursor.pos = {};
+}
+
+internal void
+UpdateCursor(r32 xChange, r32 yChange, ui_cursor* cursor, ui_element* map, game_framework_dll_code* gameFrameworkCode)
+{
+    cursor->pos.x += xChange;
+    cursor->pos.y += yChange;
+    r32 dX = cursor->pos.x - map->uiInfo->position.x;
+    r32 dY = cursor->pos.y - map->uiInfo->position.y;
+
+    r32 scale = 150.0f / 500.0f; //might be a good idea to store this somewhere
+
+    r32 offsetX = dX * scale;
+    r32 offsetY = dY * scale;
+
+    r32 xCenter = map->uiInfo->position.x + (map->uiInfo->size.x / 2);
+    r32 yCenter = map->uiInfo->position.y + (map->uiInfo->size.y / 2);
+
+    r32 markerX = offsetX + xCenter;
+    r32 markerY = offsetY + yCenter;
+    v2 marker = {markerX, markerY};
+
+    gameFrameworkCode->GameUpdateUITexture(cursor->cursorElement->uiInfo->size,
+					   marker,
+					   cursor->cursorElement->uiInfo,
+					   screenDimensions);
+}
+
+internal ui_lines
+DefineUILineSegment(v2 boatUVPos)
+{
+    ui_lines result = {};
+
+    float ax = boatUVPos.x - 0.05f;
+    float bx = boatUVPos.x + 0.05f;
+
+    v2 a = {ax, boatUVPos.y};
+    v2 b = {bx, boatUVPos.y};
+
+    result.a = a;
+    result.b = b;
+    result.q = boatUVPos;
+
+    return(result);
 }
 
 internal v3
@@ -137,6 +230,14 @@ r32 Clamp(r32 value, r32 min, r32 max)
     if (value < min) return min;
     if (value > max) return max;
     return (value);
+}
+
+v2 Clamp(v2 v, r32 min, r32 max)
+{
+    v2 result = {};
+    result.x = Clamp(v.x, min, max);
+    result.y = Clamp(v.y, min, max);
+    return(result);
 }
 
 internal r32
@@ -262,6 +363,8 @@ LerpUpdateRotationsYaw(rotational_update* inRots)
     
 #define PADSENS 2.0f
 #define SAILMOVEMENTSENS 0.003f
+#define CURSORSENS 600.0f
+
 internal v2
 RotateV2(v2 v, r32 angleR)
 {
@@ -859,7 +962,7 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
     texture_load_info windModelTexInfo = {"../data/textures/boat_wind_dir_uvs_v2.bmp", false};
     texture_load_info speedometerTexInfo = {"../data/textures/speedometer_uvs.bmp", false};
     texture_load_info boatTexInfo = {"../data/textures/boat_uv.bmp", false};
-    texture_load_info uiMap = {"../data/textures/ocean_map.bmp", true};
+    texture_load_info uiMap = {"../data/textures/map_base.bmp", true};
     texture_load_info uiBoat = {"../data/textures/boat_map.bmp", true};
     texture_load_info leftSailTut = {"../data/textures/left_sail_tutorial.bmp", true};
     texture_load_info rightSailTut = {"../data/textures/right_sail_tutorial.bmp", true};
@@ -873,25 +976,29 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
     texture_load_info maxSpeedUI = {"../data/textures/max_speed.bmp", true};
     texture_load_info wordTextureAtlasUI = {"../data/textures/alphabet_texture_atlas.bmp", true};
     texture_load_info wordSpeedUI = {"../data/textures/hud/speed_word.bmp", true};
+    texture_load_info boatCourseUI = {"../data/textures/hud/course_dir_ui.bmp", true};
+    texture_load_info mapCursorUI = {"../data/textures/map_cursor.bmp", true};
     
-    texture_load_info allTextureInfo[18] = {testPathLoadInfo, windModelTexInfo, speedometerTexInfo, boatTexInfo, uiMap, uiBoat, leftSailTut, rightSailTut, skyboxCubemap, sunImg, lbTut, rbTut, compassUI, boatDirUI, windDirUI, maxSpeedUI, wordTextureAtlasUI, wordSpeedUI};
+    texture_load_info allTextureInfo[20] = {testPathLoadInfo, windModelTexInfo, speedometerTexInfo, boatTexInfo, uiMap, uiBoat, leftSailTut, rightSailTut, skyboxCubemap, sunImg, lbTut, rbTut, compassUI, boatDirUI, windDirUI, maxSpeedUI, wordTextureAtlasUI, wordSpeedUI, boatCourseUI, mapCursorUI};
     
 
-    //Yes yes this is bad practice
+
 
     initData->gameTextures = gameFrameworkCode->GameLoadTextures(allTextureInfo,
 								 platformInfo->frameworkArenas.setupArena,
 								 platformInfo->frameworkArenas.perFrameArena,
-								 18,
+								 20,
 								 screenDimensions,
 								 DEBUGPlatformReadEntireFile,
 								 memoryPoolCode);
 
-    v2 testSize = {150.0f, 150.0f};
+    v2 mapSize = {1920.0f, 1080.0f};
+    mapSize *= 0.5f;
     v2 testLocation = {50.0f, 50.0f};
-    gameFrameworkCode->GameUpdateUITexture(testSize, testLocation, &initData->gameTextures.textures[tl_ui_map - 1].uiInfo, screenDimensions);
+    gameFrameworkCode->GameUpdateUITexture(mapSize, testLocation, &initData->gameTextures.textures[tl_ui_map - 1].uiInfo, screenDimensions);
     gameHUD->map.uiTexture = &initData->gameTextures.textures[tl_ui_map - 1];
     gameHUD->map.uiInfo = &initData->gameTextures.textures[tl_ui_map - 1].uiInfo;
+//    gameHUD->map.uiInfo->hidden = true;
     
     v2 boatMapSize = {10.0f, 10.0f};
     v2 boatMapLocation = {50.0f, 50.0f};
@@ -899,7 +1006,17 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
 
     gameHUD->mapPlayer.uiTexture = &initData->gameTextures.textures[tl_ui_boat - 1];
     gameHUD->mapPlayer.uiInfo = &initData->gameTextures.textures[tl_ui_boat - 1].uiInfo;
+//    gameHUD->mapPlayer.uiInfo->hidden = true;
 
+    v2 mapCursorSize = {100.0f, 100.0f};
+    mapCursorSize *= 0.3f;
+    v2 mapCursorLocation = {};
+    gameFrameworkCode->GameUpdateUITexture(mapCursorSize, mapCursorLocation, &initData->gameTextures.textures[tl_mapcursor_ui - 1].uiInfo, screenDimensions);
+    gameHUD->mapCursor.uiTexture = &initData->gameTextures.textures[tl_mapcursor_ui - 1];
+    gameHUD->mapCursor.uiInfo = &initData->gameTextures.textures[tl_mapcursor_ui - 1].uiInfo;
+
+    InitCursor(gameHUD);
+    
     v2 tutSize = {144.0f, 135.0f};
     v2 rbTutLoc = {1280 - 200.0f, 720 - 150.0f};
     v2 lbTutLoc = {50.0f, 720 - 150.0f};    
@@ -968,6 +1085,13 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
     gameHUD->windDir.uiTexture = &initData->gameTextures.textures[tl_wind_dir_ui - 1];
     gameHUD->windDir.uiInfo = &initData->gameTextures.textures[tl_wind_dir_ui - 1].uiInfo;
 
+    gameFrameworkCode->GameUpdateUITexture(windClusterSize,
+					   windClusterLocation,
+					   &initData->gameTextures.textures[tl_boatcourse_ui - 1].uiInfo,
+					   screenDimensions);
+    gameHUD->courseDir.uiTexture = &initData->gameTextures.textures[tl_boatcourse_ui - 1];
+    gameHUD->courseDir.uiInfo = &initData->gameTextures.textures[tl_boatcourse_ui - 1].uiInfo;
+    
     v2 maxSpeedSize = {100.0f, 100.0f};
     maxSpeedSize *= 0.8f;
     v2 maxSpeedLoc = {screenWidth - 75.0f, screenHeight - 80.0f};
@@ -1015,6 +1139,11 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
 					   &initData->gameTextures.textures[tl_wordspeed_ui - 1].uiInfo,
 					   screenDimensions);
 
+
+    SetMapPawns(gameHUD);
+
+
+    //Game models
     
     transform sunTransform = {};
     sunTransform.location = {100.0f, 10.0f, 0.0f};
@@ -1033,7 +1162,7 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
     TextAtlasSetup(gameHUD);
     
     transform maroonedTransform = {};
-    maroonedTransform.location = {0.0f, 0.0f, -50.0f};
+    maroonedTransform.location = {1000.0f, 0.0f, -1000.0f};
     maroonedTransform.rotation = QuaternionIdentity();
     maroonedTransform.scale = oneScale;
 
@@ -1044,7 +1173,9 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
 					   memoryPoolCode,
 					   false,
 					   Identity());
-    maroonedOBJ->hidden = true;
+//    maroonedOBJ->hidden = true;
+
+
     
     transform oceanTransform = {};
     oceanTransform.location = {0.0f, -5.0f, 0.0f, 0.f};
@@ -1295,6 +1426,8 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
 	initData->boat.bottomSpeed = 1.0f;
 
 
+    initData->boat.destLocation = maroonedTransform.location;
+    
 /*
   Wind Rotational setup 
  */
@@ -1896,124 +2029,167 @@ extern "C" SAIL_UPDATE(SailUpdate)
 	    {
 		gameState->tutorialData.upToSpeed = false;
 	    }
-		
+	    if ((padController->one.halfTransitionCount == 1) && (padController->one.endedDown))
+	    {
+		SetMapVisibility(!gameState->gameHUD->mapVisible, gameState->gameHUD);
+		if (gameState->gameHUD->mapVisible)
+		{
+		    gameState->playMode = epm_play;
+		}
+		else
+		{
+		    gameState->playMode = epm_ui;
+		}
+	    }		
 	    
-	    
-	    if ((controller->moveDown.started) || (padController->five.halfTransitionCount == 1 && padController->five.endedDown))
-	    {
-		ChangeCamOffset(static_cam_location::scl_left, boat, gameState);
-		CalculateCameraLocation(camera, boat);
-		controller->moveDown.started = false;
-	    }
-
-	    //E
-	    if ((controller->moveUp.started) || (padController->six.halfTransitionCount == 1 && padController->six.endedDown))
-	    {
-		ChangeCamOffset(static_cam_location::scl_right, boat, gameState);
-		CalculateCameraLocation(camera, boat);
-		controller->moveUp.started = false;
-
-	    }
-
-	    if ((boat->staticCamLocation == scl_right) || (boat->staticCamLocation == scl_left))
-	    {
-		boat->boatCameraMode = bcm_winch;
-	    }
-	    else
-	    {
-		boat->boatCameraMode = bcm_steer;
-	    }
-	    v4 zAxis = {0.0f, 1.0f, 0.0f, 0.0f};		
-
-	    
-
-	    if ((padController->lookRight.endedDown) || (padController->lookLeft.endedDown) ||
-		(padController->lookUp.endedDown) || (padController->lookDown.endedDown))
-	    {
-		camera->xChange = deltaTime * (-padController->rightStickAverageX * PADSENS);
-		camera->yChange = deltaTime * (padController->rightStickAverageY * PADSENS);
-	    }
-
-	    r32 turnSpeed = 0.0f;
-	    if (boat->movementDirection == bmd_forward)
-	    {
-		turnSpeed = (40.0f * boat->movementSpeed) * deltaTime;
-	    }
-	    else
-	    {
-		turnSpeed = 0.5f;
-	    }
-	    r32 turnSlerp = 10.0f;
+	    r32 currSailYaw = main->targetSailRotations.yaw;
 	    r32 currYaw = boat->targetBoatRotations.yaw;
+	    r32 turnSlerp = 10.0f;
 
-	    r32 turnSailSlerp = 5.0f;
-	    r32 sailTurnSpeed = 0.08f;
-	    r32 currSailYaw = main->targetSailRotations.yaw;	    
-	    if (boat->boatCameraMode == bcm_steer)
-	    {
-		if (controller->moveLeft.endedDown || padController->moveLeft.endedDown)
+	    if (gameState->playMode == epm_play)
+	    {	    
+		if ((controller->moveDown.started) || (padController->five.halfTransitionCount == 1 && padController->five.endedDown))
 		{
-
-		    boat->currTargetYaw = boat->targetBoatRotations.y + turnSpeed;
+		    ChangeCamOffset(static_cam_location::scl_left, boat, gameState);
+		    CalculateCameraLocation(camera, boat);
+		    controller->moveDown.started = false;
 		}
+
+		//E
+		if ((controller->moveUp.started) || (padController->six.halfTransitionCount == 1 && padController->six.endedDown))
+		{
+		    ChangeCamOffset(static_cam_location::scl_right, boat, gameState);
+		    CalculateCameraLocation(camera, boat);
+		    controller->moveUp.started = false;
+
+		}
+
+		if ((boat->staticCamLocation == scl_right) || (boat->staticCamLocation == scl_left))
+		{
+		    boat->boatCameraMode = bcm_winch;
+		}
+		else
+		{
+		    boat->boatCameraMode = bcm_steer;
+		}
+		v4 zAxis = {0.0f, 1.0f, 0.0f, 0.0f};		
+
+	    
+
+		if ((padController->lookRight.endedDown) || (padController->lookLeft.endedDown) ||
+		    (padController->lookUp.endedDown) || (padController->lookDown.endedDown))
+		{
+		    camera->xChange = deltaTime * (-padController->rightStickAverageX * PADSENS);
+		    camera->yChange = deltaTime * (padController->rightStickAverageY * PADSENS);
+		}
+
+		r32 turnSpeed = 0.0f;
+		if (boat->movementDirection == bmd_forward)
+		{
+		    turnSpeed = (40.0f * boat->movementSpeed) * deltaTime;
+		}
+		else
+		{
+		    turnSpeed = 0.5f;
+		}
+
+
+
+		r32 turnSailSlerp = 5.0f;
+		r32 sailTurnSpeed = 0.08f;
+
+		if (boat->boatCameraMode == bcm_steer)
+		{
+		    if (controller->moveLeft.endedDown || padController->moveLeft.endedDown)
+		    {
+
+			boat->currTargetYaw = boat->targetBoatRotations.y + turnSpeed;
+		    }
 
 		
-		if (controller->moveRight.endedDown || padController->moveRight.endedDown)
+		    if (controller->moveRight.endedDown || padController->moveRight.endedDown)
+		    {
+			boat->currTargetYaw = boat->targetBoatRotations.y - turnSpeed;
+		    }
+		}
+		else if (boat->boatCameraMode == bcm_winch)
 		{
-		    boat->currTargetYaw = boat->targetBoatRotations.y - turnSpeed;
+		    //change the orientation of the sails
+
+		    /*
+		      then flesh out some of the kinks with the rotation and wind direction stuff
+		      then make a input buffer to make it so you have to 'wind' the sails in each direction
+		      using 'asdwa' or 'dsawd' depending on which way you want to rotate the sail
+		    */
+
+		    r32 sailDeg = 0.5f;
+		    if (boat->staticCamLocation == static_cam_location::scl_left)
+		    {
+
+			r32 newYaw = InterpretControllerInformation(padController,
+								    ROTATION_CLOCKWISE,
+								    boat,
+								    &initData->newJoystick,
+								    &initData->oldJoystick,
+								    &boat->winchL,
+								    main->targetSailRotations.y);
+
+			main->targetYaw = newYaw;		    
+			if (controller->moveLeft.endedDown)
+			{
+			    main->targetYaw = main->targetSailRotations.y - sailTurnSpeed;
+			}
+//		    CancelRotationVariance(boat);
+		    
+		    }
+		    else if (boat->staticCamLocation == static_cam_location::scl_right)
+		    {
+			r32 newYaw = InterpretControllerInformation(padController,
+								    ROTATION_COUNTERCLOCKWISE,
+								    boat,
+								    &initData->newJoystick,
+								    &initData->oldJoystick,
+								    &boat->winchR,
+								    main->targetSailRotations.y);
+		    
+
+
+			main->targetYaw = newYaw;
+			if (controller->moveRight.endedDown)
+			{
+			    main->targetYaw = main->targetSailRotations.y + sailTurnSpeed;
+			}
+
+//		    CancelRotationVariance(boat);
+		    }
 		}
 	    }
-	    else if (boat->boatCameraMode == bcm_winch)
+	    else if (gameState->playMode == epm_ui)
 	    {
-		//change the orientation of the sails
-
-		/*
-		  then flesh out some of the kinks with the rotation and wind direction stuff
-		  then make a input buffer to make it so you have to 'wind' the sails in each direction
-		  using 'asdwa' or 'dsawd' depending on which way you want to rotate the sail
-		*/
-
-		r32 sailDeg = 0.5f;
-		if (boat->staticCamLocation == static_cam_location::scl_left)
+		if ((padController->moveLeft.endedDown) || (padController->moveRight.endedDown) ||
+		    (padController->moveUp.endedDown) || (padController->moveDown.endedDown))
 		{
+		    r32 xChange, yChange;
+		    xChange = deltaTime * (padController->leftStickAverageX * CURSORSENS);
+		    yChange = deltaTime * (-padController->leftStickAverageY * CURSORSENS);
+		    UpdateCursor(xChange,
+				 yChange,
+				 &gameState->gameHUD->cursor,
+				 &gameState->gameHUD->map,
+				 gameFrameworkCode);
 
-		    r32 newYaw = InterpretControllerInformation(padController,
-								ROTATION_CLOCKWISE,
-								boat,
-								&initData->newJoystick,
-								&initData->oldJoystick,
-								&boat->winchL,
-								main->targetSailRotations.y);
-
-		    main->targetYaw = newYaw;		    
-		    if (controller->moveLeft.endedDown)
-		    {
-			main->targetYaw = main->targetSailRotations.y - sailTurnSpeed;
-		    }
-//		    CancelRotationVariance(boat);
 		    
 		}
-		else if (boat->staticCamLocation == static_cam_location::scl_right)
+		if (padController->two.halfTransitionCount == 1 && padController->two.endedDown)
 		{
-		    r32 newYaw = InterpretControllerInformation(padController,
-								ROTATION_COUNTERCLOCKWISE,
-								boat,
-								&initData->newJoystick,
-								&initData->oldJoystick,
-								&boat->winchR,
-								main->targetSailRotations.y);
-		    
-
-
-		    main->targetYaw = newYaw;
-		    if (controller->moveRight.endedDown)
+		    //start our line segment stuff
+		    if (gameState->gameHUD->numOfDrawnLines <= MAXLINECOUNT - 1)
 		    {
-			main->targetYaw = main->targetSailRotations.y + sailTurnSpeed;
+			gameState->gameHUD->lines[gameState->gameHUD->numOfDrawnLines] = DefineUILineSegment(gameState->gameHUD->mapPlayer.ndcPos);
+			(gameState->gameHUD->numOfDrawnLines)++;
 		    }
-
-//		    CancelRotationVariance(boat);
 		}
-	    }
+	    }	    
 
 	    AddWindVariance(&boat->sailInfo);
 	    AddBoatRotationVariance(boat);
@@ -2082,11 +2258,20 @@ extern "C" SAIL_UPDATE(SailUpdate)
 
 	    windSock->model->modelMatrix = windMat;
 
+	    v2 boatXZ = {boat->forward.x, boat->forward.z};
+	    //Destination course update
 
+	    v2 destXZ = {boat->destLocation.x, boat->destLocation.z};
+	    v2 boatLocXZ = {boatPos.x, boatPos.z};
+	    v2 toDest = GetDirectionVectorFromTwoPoints(destXZ, boatLocXZ);
+	    v4 toDestF = v4{toDest.x, 0.0f, toDest.y, 0.0f};
+	    v4 destRots = GetEulerFromForwardD(toDestF);
+	    ApplyRotationToUI(gameState->gameHUD->courseDir.uiInfo, destRots.y);
+	    
 	    //Wind model
 
 
-	    v2 boatXZ = {boat->forward.x, boat->forward.z};
+
 	    v2 north = {0.0f, 1.0f};
 	    v2 windXZ = {clearWind.x, clearWind.z};
 	    v4 windModelOffset = {-0.4f, 0.3f, 1.8f, 0.0f};	    
@@ -2141,27 +2326,34 @@ extern "C" SAIL_UPDATE(SailUpdate)
     //Convert screen locations to local screen location
     //MapValue(world, screen)
 
-    ui_update* mapTextureInfo = &initData->gameTextures.textures[tl_ui_map - 1].uiInfo;
+    if (!gameState->gameHUD->mapVisible)
+    {
+	ui_update* mapTextureInfo = &initData->gameTextures.textures[tl_ui_map - 1].uiInfo;
     
-    r32 dX = boat->objInfo->modelTransform.location.x - mapTextureInfo->position.x;
-    r32 dY = boat->objInfo->modelTransform.location.z - mapTextureInfo->position.y;
+	r32 dX = boat->objInfo->modelTransform.location.x - mapTextureInfo->position.x;
+	r32 dY = boat->objInfo->modelTransform.location.z - mapTextureInfo->position.y;
 
-    r32 scale = 150.0f / 500.0f;
+	r32 scale = 150.0f / 500.0f;
     
-    r32 offsetX = dX * scale;
-    r32 offsetY = dY * scale;
+	r32 offsetX = dX * scale;
+	r32 offsetY = dY * scale;
 
-    r32 xCenter = mapTextureInfo->position.x + (mapTextureInfo->size.x / 2);
-    r32 yCenter = mapTextureInfo->position.y + (mapTextureInfo->size.y / 2);
+	r32 xCenter = mapTextureInfo->position.x + (mapTextureInfo->size.x / 2);
+	r32 yCenter = mapTextureInfo->position.y + (mapTextureInfo->size.y / 2);
     
-    r32 markerX = offsetX + xCenter;
-    r32 markerY = offsetY + yCenter;
+	r32 markerX = offsetX + xCenter;
+	r32 markerY = offsetY + yCenter;
 
-    v2 marker = {markerX, markerY};
-    gameFrameworkCode->GameUpdateUITexture(initData->gameTextures.textures[tl_ui_boat - 1].uiInfo.size,
-					   marker,
-					   &initData->gameTextures.textures[tl_ui_boat - 1].uiInfo,
-					   screenDimensions);
+	v2 marker = {markerX, markerY};
+
+	//normalize??
+	v2 uvRange = {0.0f, 1.0f};
+	gameState->gameHUD->mapPlayer.ndcPos = Map(marker, uvRange, marker);
+	gameFrameworkCode->GameUpdateUITexture(initData->gameTextures.textures[tl_ui_boat - 1].uiInfo.size,
+					       marker,
+					       &initData->gameTextures.textures[tl_ui_boat - 1].uiInfo,
+					       screenDimensions);
+    }
 
 
     spawned_obj_info* skybox = initData->skybox;

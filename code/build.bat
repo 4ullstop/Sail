@@ -25,6 +25,8 @@ fxc.exe -nologo /Od /Zi /T ps_5_0 /E PS /Fo ui_ps.cso "S:\code\ui_shader_ps.hlsl
 fxc.exe -nologo /Od /Zi /T vs_5_0 /E VS /Fo pp_vs.cso "S:\code\post_process_vs.hlsl"
 fxc.exe -nologo /Od /Zi /T ps_5_0 /E PS /Fo pp_ps.cso "S:\code\post_process_ps.hlsl"
 
+fxc.exe -nologo /Od /Zi /T ps_5_0 /E PS /Fo line_shader_ps.cso "S:\code\line_shader_ps.hlsl"
+
 cl %commonCompilerFlags% ..\code\sail_game_layer.cpp /LD /link /EXPORT:SailUpdate /EXPORT:SailInitialize
 
 cl %commonCompilerFlags% ..\code\sail_win32.cpp  /link %commonLinkerFlags%

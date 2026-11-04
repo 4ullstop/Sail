@@ -1,8 +1,11 @@
+
+#define MAXLINECOUNT 16
 #include "sail_win32.h"
 
 
 global_variable r32 screenWidth = 1280;
 global_variable r32 screenHeight = 720;
+
 
 #include "sail_game_layer.h"
 #include <windows.h>
@@ -54,6 +57,7 @@ global_variable ID3D11SamplerState* uiTextureSamplerState;
 global_variable ID3D11DepthStencilState* disableDepthState;
 global_variable ID3D11BlendState* alphaBlendState;
 global_variable ID3D11Buffer* uiIndexBuffer;
+global_variable ID3D11Buffer* uiVertexBuffer;
 
 global_variable memory_pool_dll_code memoryPoolCode;
 global_variable win32_arenas* programArenas;
@@ -71,6 +75,66 @@ global_variable i64 perfCountFrequency;
 
 
 global_variable r32 deltaTime;
+
+
+/*
+  UI Line segments
+ */
+internal DirectX::XMFLOAT2
+FromV2ToXMFLOAT2(v2 v)
+{
+    DirectX::XMFLOAT2 result = {};
+    result.x = v.x;
+    result.y = v.y;
+
+    return(result);
+}
+
+internal void
+UpdateLineSegmentUI(hud* gameHUD, sail_constant_buffers* cbs)
+{
+    //call updatesubresource
+    //but when call??? who was phone????
+    if (gameHUD->numOfDrawnLines < gameHUD->prevNumOfDrawnLines)
+    {
+	ui_lines* uiLine = &gameHUD->lines[gameHUD->prevNumOfDrawnLines];
+	line_segment_constant_buffer newLine = {};
+	newLine.a = FromV2ToXMFLOAT2(uiLine->a);
+	newLine.b = FromV2ToXMFLOAT2(uiLine->b);
+	newLine.q = FromV2ToXMFLOAT2(uiLine->q);
+
+	DirectX::XMVECTOR rgbtV = DirectX::XMVectorSet(0.0f, 0.0f, 0.0f, 0.5f);
+	DirectX::XMStoreFloat4(&newLine.colorThick,
+			       rgbtV);
+
+	context->UpdateSubresource(cbs->lineSegmentBuffers[gameHUD->prevNumOfDrawnLines], 0, nullptr, &newLine, 0, 0);
+
+	gameHUD->prevNumOfDrawnLines = gameHUD->numOfDrawnLines;
+    }
+}
+
+internal void
+CreateLineSegmentConstantBuffers(sail_constant_buffers* cbs)
+{
+    HRESULT hr = {};
+    
+    for (i32 i = 0; i < MAXLINECOUNT; i++)
+    {
+	D3D11_BUFFER_DESC lineDesc = {};
+	lineDesc.Usage = D3D11_USAGE_DEFAULT;
+	lineDesc.ByteWidth = sizeof(line_segment_constant_buffer);
+	lineDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+	lineDesc.CPUAccessFlags = 0;
+
+	hr = d3dDevice->CreateBuffer(&lineDesc, nullptr, &cbs->lineSegmentBuffers[i]);
+	
+    }
+}
+
+
+/*
+  Ocean buffer stuffs that should be in game code at some point when you get to it
+ */
 
 struct game_vertex_pos_color
 {
@@ -534,12 +598,27 @@ CreateShaders(shaders* gameShaders)
 				      ppVSResult.contentsSize,
 				      &gameShaders->ppIALayout);
 
+
+    
+    
     debug_read_file_result ppPSResult = DEBUGPlatformReadEntireFile(&blankThread, "../build/pp_ps.cso");
     bytes = (BYTE*)ppPSResult.contents;
     hr = d3dDevice->CreatePixelShader(ppPSResult.contents,
 				      ppPSResult.contentsSize,
 				      nullptr,
 				      &gameShaders->ppPS);
+
+
+    debug_read_file_result lineShaderPixelResult = DEBUGPlatformReadEntireFile(&blankThread, "../build/line_shader_ps.cso");
+
+    bytes = (BYTE*)lineShaderPixelResult.contents;
+    hr = d3dDevice->CreatePixelShader(lineShaderPixelResult.contents,
+				      lineShaderPixelResult.contentsSize,
+				      nullptr,
+				      &gameShaders->linePixelShader);
+    
+	
+	
 }
 
 internal draw_buffers*
@@ -667,6 +746,28 @@ RenderText2D(texture_buffers* texture, hud* gameHUD, shaders* shader)
 
 	
 	context->IASetVertexBuffers(0, 1, &texture->uiVertexBuffer, &stride, &offset);
+	context->IASetIndexBuffer(uiIndexBuffer, DXGI_FORMAT_R16_UINT, 0);
+
+	context->DrawIndexed(6, 0, 0);
+    }
+}
+
+internal void
+RenderLineSegments(hud* gameHUD, sail_constant_buffers* cbs, shaders* shader)
+{
+    UINT stride = sizeof(ui_vertex);
+    UINT offset = 0;
+
+    UpdateLineSegmentUI(gameHUD, cbs);
+    for (i32 i = 0; i < gameHUD->numOfDrawnLines; i++)
+    {
+	context->VSSetShader(shader->uiVertexShader, nullptr, 0);
+	context->IASetInputLayout(shader->uiInputLayout);
+	context->PSSetShader(shader->linePixelShader, nullptr, 0);
+	
+	
+	//Set index buffer use uiIndexBuffer
+	context->IASetVertexBuffers(0, 1, &uiVertexBuffer, &stride, &offset);
 	context->IASetIndexBuffer(uiIndexBuffer, DXGI_FORMAT_R16_UINT, 0);
 
 	context->DrawIndexed(6, 0, 0);
@@ -1422,7 +1523,8 @@ int CALLBACK WinMain(HINSTANCE hInstance,
 	    ppSampDesc.MaxLOD = D3D11_FLOAT32_MAX;
 
 	    d3dDevice->CreateSamplerState(&ppSampDesc, &postProcessSamplerState);
-								  
+
+
 
 //2d
 
@@ -1519,6 +1621,7 @@ int CALLBACK WinMain(HINSTANCE hInstance,
 	    odDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
 
 
+	    CreateLineSegmentConstantBuffers(&sailConstantBuffers);
 	    
 	    //Creating the sampler states for textures
 
@@ -1534,9 +1637,30 @@ int CALLBACK WinMain(HINSTANCE hInstance,
 	    uiIndexData.SysMemPitch = 0;
 	    uiIndexData.SysMemSlicePitch = 0;
 
-
  
 	    hr = d3dDevice->CreateBuffer(&uiIndexDesc, &uiIndexData, &uiIndexBuffer);
+
+	    //Create dummy uiVertexBuffer
+	    CD3D11_BUFFER_DESC uiVertDesc(
+		sizeof(ui_vertex) * 4,
+		D3D11_BIND_VERTEX_BUFFER);
+	    D3D11_SUBRESOURCE_DATA uiVertexData;
+	    ZeroMemory(&uiVertexData, sizeof(D3D11_SUBRESOURCE_DATA));
+	    ui_vertex tempVerts[4];
+	    for (i32 i = 0; i < 4; i++)
+	    {
+		for (i32 j = 0; j < 2; j++)
+		{
+		    tempVerts[i].position[j] = 0.0f;
+		    tempVerts[i].uv[j] = 0.0f;
+		}
+	    }
+	    uiVertexData.pSysMem = &tempVerts;
+	    uiVertexData.SysMemPitch = 0;
+	    uiVertexData.SysMemSlicePitch = 0;
+
+	    hr = d3dDevice->CreateBuffer(&uiVertDesc, &uiVertexData, &uiVertexBuffer);
+	    
 	    
 
 	    D3D11_BUFFER_DESC fogDesc = {};
