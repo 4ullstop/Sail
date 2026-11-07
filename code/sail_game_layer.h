@@ -69,7 +69,6 @@ struct ui_lines
 {
     v2 a;
     v2 b;
-    v2 q;
 };
 
 

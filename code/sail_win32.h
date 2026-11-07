@@ -167,7 +167,7 @@ struct alignas(16) line_segment_constant_buffer
 {
     DirectX::XMFLOAT2 a;
     DirectX::XMFLOAT2 b;
-    DirectX::XMFLOAT2 q;
+    DirectX::XMFLOAT2 p;
     DirectX::XMFLOAT4 colorThick; //storing the thickness in the alpha value
 };
 

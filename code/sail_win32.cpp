@@ -90,20 +90,30 @@ FromV2ToXMFLOAT2(v2 v)
     return(result);
 }
 
+internal v2
+NDCToPixel(v2 a)
+{
+    v2 screenRes = {screenWidth, screenHeight};
+    v2 result = (a + 1.0f);
+    result = result * 0.5f;
+    result = result * screenRes;
+    return(result);
+}
+
 internal void
 UpdateLineSegmentUI(hud* gameHUD, sail_constant_buffers* cbs)
 {
     //call updatesubresource
     //but when call??? who was phone????
-    if (gameHUD->numOfDrawnLines < gameHUD->prevNumOfDrawnLines)
+    if (gameHUD->numOfDrawnLines > gameHUD->prevNumOfDrawnLines)
     {
 	ui_lines* uiLine = &gameHUD->lines[gameHUD->prevNumOfDrawnLines];
 	line_segment_constant_buffer newLine = {};
+
 	newLine.a = FromV2ToXMFLOAT2(uiLine->a);
 	newLine.b = FromV2ToXMFLOAT2(uiLine->b);
-	newLine.q = FromV2ToXMFLOAT2(uiLine->q);
 
-	DirectX::XMVECTOR rgbtV = DirectX::XMVectorSet(0.0f, 0.0f, 0.0f, 0.5f);
+	DirectX::XMVECTOR rgbtV = DirectX::XMVectorSet(100.0f, 0.0f, 0.0f, 0.0f);
 	DirectX::XMStoreFloat4(&newLine.colorThick,
 			       rgbtV);
 
@@ -761,10 +771,13 @@ RenderLineSegments(hud* gameHUD, sail_constant_buffers* cbs, shaders* shader)
     UpdateLineSegmentUI(gameHUD, cbs);
     for (i32 i = 0; i < gameHUD->numOfDrawnLines; i++)
     {
+	context->OMSetDepthStencilState(disableDepthState, 0);
+	context->OMSetBlendState(alphaBlendState, NULL, 0xFFFFFFFF);
+	
 	context->VSSetShader(shader->uiVertexShader, nullptr, 0);
 	context->IASetInputLayout(shader->uiInputLayout);
 	context->PSSetShader(shader->linePixelShader, nullptr, 0);
-	
+	context->PSSetConstantBuffers(0, 1, &cbs->lineSegmentBuffers[i]);
 	
 	//Set index buffer use uiIndexBuffer
 	context->IASetVertexBuffers(0, 1, &uiVertexBuffer, &stride, &offset);
@@ -775,7 +788,7 @@ RenderLineSegments(hud* gameHUD, sail_constant_buffers* cbs, shaders* shader)
 }
 
 internal void
-Render2D(shaders* shader, win32_spawnable_objs* win32Objs, game_state* gameState)
+Render2D(shaders* shader, win32_spawnable_objs* win32Objs, game_state* gameState, sail_constant_buffers* cbs)
 {
     for (i32 i = 0; i < win32Objs->numOf2DTextures; i++)
     {
@@ -834,6 +847,8 @@ Render2D(shaders* shader, win32_spawnable_objs* win32Objs, game_state* gameState
 	    }
 	}
     }
+    RenderLineSegments(gameState->gameHUD, cbs, shader);
+    
     context->OMSetDepthStencilState(nullptr, 0);
     context->OMSetBlendState(nullptr, nullptr, 0xFFFFFFFF);
 }
@@ -1065,7 +1080,7 @@ Render(game_loaded_objs* gameObjs, win32_spawnable_objs* win32Objs, sail_constan
     
     
     //Finally render 2d
-    Render2D(shader, win32Objs, gameState);
+    Render2D(shader, win32Objs, gameState, cBuffers);
 
     context->OMSetDepthStencilState(nullptr, 0);
     context->OMSetBlendState(nullptr, nullptr, 0xFFFFFFFF);
@@ -1646,15 +1661,15 @@ int CALLBACK WinMain(HINSTANCE hInstance,
 		D3D11_BIND_VERTEX_BUFFER);
 	    D3D11_SUBRESOURCE_DATA uiVertexData;
 	    ZeroMemory(&uiVertexData, sizeof(D3D11_SUBRESOURCE_DATA));
-	    ui_vertex tempVerts[4];
-	    for (i32 i = 0; i < 4; i++)
+
+	    ui_vertex tempVerts[] =
 	    {
-		for (i32 j = 0; j < 2; j++)
-		{
-		    tempVerts[i].position[j] = 0.0f;
-		    tempVerts[i].uv[j] = 0.0f;
-		}
-	    }
+		{-1.0f, -1.0f},
+		{-1.0f, 1.0f},
+		{1.0f, -1.0f},
+		{1.0f, 1.0f}
+	    };
+	    
 	    uiVertexData.pSysMem = &tempVerts;
 	    uiVertexData.SysMemPitch = 0;
 	    uiVertexData.SysMemSlicePitch = 0;

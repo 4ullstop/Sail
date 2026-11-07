@@ -174,6 +174,7 @@ UpdateCursor(r32 xChange, r32 yChange, ui_cursor* cursor, ui_element* map, game_
 {
     cursor->pos.x += xChange;
     cursor->pos.y += yChange;
+#if 0
     r32 dX = cursor->pos.x - map->uiInfo->position.x;
     r32 dY = cursor->pos.y - map->uiInfo->position.y;
 
@@ -188,7 +189,9 @@ UpdateCursor(r32 xChange, r32 yChange, ui_cursor* cursor, ui_element* map, game_
     r32 markerX = offsetX + xCenter;
     r32 markerY = offsetY + yCenter;
     v2 marker = {markerX, markerY};
-
+#else
+    v2 marker = cursor->pos;
+#endif    
     gameFrameworkCode->GameUpdateUITexture(cursor->cursorElement->uiInfo->size,
 					   marker,
 					   cursor->cursorElement->uiInfo,
@@ -196,20 +199,11 @@ UpdateCursor(r32 xChange, r32 yChange, ui_cursor* cursor, ui_element* map, game_
 }
 
 internal ui_lines
-DefineUILineSegment(v2 boatUVPos)
+DefineUILineSegment(v2 boatUVPos, v2 cursorPos)
 {
     ui_lines result = {};
-
-    float ax = boatUVPos.x - 0.05f;
-    float bx = boatUVPos.x + 0.05f;
-
-    v2 a = {ax, boatUVPos.y};
-    v2 b = {bx, boatUVPos.y};
-
-    result.a = a;
-    result.b = b;
-    result.q = boatUVPos;
-
+    result.a = boatUVPos;
+    result.b = cursorPos;
     return(result);
 }
 
@@ -363,7 +357,7 @@ LerpUpdateRotationsYaw(rotational_update* inRots)
     
 #define PADSENS 2.0f
 #define SAILMOVEMENTSENS 0.003f
-#define CURSORSENS 600.0f
+#define CURSORSENS 200.0f
 
 internal v2
 RotateV2(v2 v, r32 angleR)
@@ -1000,7 +994,7 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
     gameHUD->map.uiInfo = &initData->gameTextures.textures[tl_ui_map - 1].uiInfo;
 //    gameHUD->map.uiInfo->hidden = true;
     
-    v2 boatMapSize = {10.0f, 10.0f};
+    v2 boatMapSize = {100.0f, 100.0f};
     v2 boatMapLocation = {50.0f, 50.0f};
     gameFrameworkCode->GameUpdateUITexture(boatMapSize, boatMapLocation, &initData->gameTextures.textures[tl_ui_boat - 1].uiInfo, screenDimensions);
 
@@ -2185,7 +2179,28 @@ extern "C" SAIL_UPDATE(SailUpdate)
 		    //start our line segment stuff
 		    if (gameState->gameHUD->numOfDrawnLines <= MAXLINECOUNT - 1)
 		    {
-			gameState->gameHUD->lines[gameState->gameHUD->numOfDrawnLines] = DefineUILineSegment(gameState->gameHUD->mapPlayer.ndcPos);
+			v2 adjustedCursor = gameState->gameHUD->cursor.pos;
+			v2 cursorSize = gameState->gameHUD->mapCursor.uiInfo->size;
+
+			adjustedCursor.x = gameState->gameHUD->cursor.pos.x + (cursorSize.x * 0.5f);
+			adjustedCursor.y = gameState->gameHUD->cursor.pos.y + ((cursorSize.y));	
+
+			if (gameState->gameHUD->numOfDrawnLines > 0)
+			{
+			    //prev position of line is the start
+			    // a is new start
+			    v2 prevEnd = gameState->gameHUD->lines[gameState->gameHUD->numOfDrawnLines - 1].b;
+			    gameState->gameHUD->lines[gameState->gameHUD->numOfDrawnLines] =
+				DefineUILineSegment(prevEnd, adjustedCursor);
+			}
+			else
+			{
+			    adjustedCursor.x = gameState->gameHUD->cursor.pos.x + (cursorSize.x * 0.5f);
+			    adjustedCursor.y = gameState->gameHUD->cursor.pos.y + ((cursorSize.y));
+
+			    gameState->gameHUD->lines[gameState->gameHUD->numOfDrawnLines] =
+				DefineUILineSegment(gameState->gameHUD->mapPlayer.ndcPos, adjustedCursor);
+			}
 			(gameState->gameHUD->numOfDrawnLines)++;
 		    }
 		}
@@ -2310,7 +2325,7 @@ extern "C" SAIL_UPDATE(SailUpdate)
 	}
     }
 
-    gameFrameworkCode->GameUpdateCamera(camera);
+ gameFrameworkCode->GameUpdateCamera(camera);
     //add check if tutorial complete with tutorialComplete bool that you haven't made yet
 
 
@@ -2348,7 +2363,14 @@ extern "C" SAIL_UPDATE(SailUpdate)
 
 	//normalize??
 	v2 uvRange = {0.0f, 1.0f};
-	gameState->gameHUD->mapPlayer.ndcPos = Map(marker, uvRange, marker);
+	v2 playerSize = gameState->gameHUD->mapPlayer.uiInfo->size;
+
+	if (gameState->gameHUD->numOfDrawnLines <= 0)
+	{
+	    gameState->gameHUD->mapPlayer.ndcPos.x = marker.x + (playerSize.x * 0.5f);
+	    gameState->gameHUD->mapPlayer.ndcPos.y = marker.y + ((playerSize.y * 0.5f) + 15.0f);
+	}
+//Map(marker, uvRange, marker);
 	gameFrameworkCode->GameUpdateUITexture(initData->gameTextures.textures[tl_ui_boat - 1].uiInfo.size,
 					       marker,
 					       &initData->gameTextures.textures[tl_ui_boat - 1].uiInfo,
