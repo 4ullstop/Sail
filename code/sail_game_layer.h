@@ -79,7 +79,7 @@ struct hud
     text_atlas_info textAtlas;
     union
     {
-	ui_element uiElements[14];
+	ui_element uiElements[15];
 	struct
 	{
 	    ui_element rightBumper;
@@ -102,6 +102,7 @@ struct hud
 
 	    ui_element speedText;
 
+	    ui_element timeText;
 	    
 	    ui_element terminator;
 	};
@@ -127,6 +128,22 @@ enum play_mode
     epm_ui,
 };
 
+struct time
+{
+    i32 hour;
+    i32 minutes;
+    r32 seconds;
+};
+
+struct world_clock
+{
+    time gameCurrentTime;
+    r32 dayLengthMinutes; //in minutes
+    r32 dayLengthSeconds;
+    r32 elapsedTimeSeconds;
+    r32 elapsedTimeMinutes;
+};
+
 struct game_state
 {
     tutorial_data tutorialData;
@@ -137,6 +154,7 @@ struct game_state
     hud* gameHUD;
     static_cam_location currentCamLocation;
     play_mode playMode;
+    world_clock worldClock;
 };
 
 enum sail_orientation
@@ -220,6 +238,14 @@ struct variance
     bool32 varianceInit;
 };
 
+struct wind_change
+{
+    i32 hour;
+    i32 minute;
+
+    r32 newWindDirection;
+};
+
 struct sailing
 {
     v4 windDirection;
@@ -236,6 +262,7 @@ struct sailing
 
     variance windVariance;
 
+    wind_change windChanges[3];
 };
 
 enum boat_cam_mode

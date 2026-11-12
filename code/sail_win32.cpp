@@ -738,8 +738,8 @@ RenderText2D(texture_buffers* texture, hud* gameHUD, shaders* shader)
 
 	uv_offset_result uv = UVOffsetForCharacter(uiInfo->textElement.str[i], &gameHUD->textAtlas);
 
-	r32 textSpacing = -10.8f;
-	r32 offsetPos = (r32)((i * (gameHUD->textAtlas.refWidth + textSpacing)) / screenWidth);
+//	r32 textSpacing = -10.8f;
+	r32 offsetPos = (r32)((i * (gameHUD->textAtlas.refWidth + uiInfo->textElement.textSpacing)) / screenWidth);
 	AssignNewUVS(uiInfo->ndcInfo, uv, offsetPos, uiInfo->ndcBaseInfo);
 
 	for (i32 j = 0; j < 4; j++)
@@ -1811,14 +1811,16 @@ int CALLBACK WinMain(HINSTANCE hInstance,
 							oceanRotation,
 							oceanNewLoc);
 		    
-		
+
+#if 0		
 		char normalBoat[256];
 		sprintf_s(normalBoat, sizeof(normalBoat), "BoatRot TargetYaw: %f\n",
 			  boat->rOutput);
-
+		OutputDebugString(normalBoat); 
+#endif
 				
 		
-		OutputDebugString(normalBoat);
+
 
 
 		game_camera_data gCamData = {};
@@ -1887,6 +1889,13 @@ int CALLBACK WinMain(HINSTANCE hInstance,
 		LONGLONG elapsed = endTime.QuadPart - startTime.QuadPart;
 		deltaTime = (r32)((r32)elapsed / (r32)frequency.QuadPart);
 
+		r32 elapsedR = (r32)elapsed;
+		char timeBuffer[256];
+		sprintf_s(timeBuffer, sizeof(timeBuffer), "%i : %i\n",
+			  gameState.worldClock.gameCurrentTime.hour,
+			  gameState.worldClock.gameCurrentTime.minutes);
+
+		OutputDebugString(timeBuffer);
 
 	    }
 	}

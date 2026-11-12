@@ -44,6 +44,38 @@ global_variable v2 screenDimensions = {screenWidth, screenHeight};
   
  */
 
+
+internal void
+InitWorldTime(world_clock* worldClock)
+{
+    worldClock->dayLengthMinutes = 10.0f;//10 minutes per day
+    worldClock->dayLengthSeconds = worldClock->dayLengthMinutes * 60.0f;
+    worldClock->gameCurrentTime = {};
+}
+
+internal void
+UpdateWorldTimeUI(world_clock* clock)
+{
+
+}
+
+internal void
+UpdateWorldTime(world_clock* worldClock)
+{
+    worldClock->dayLengthMinutes = 10.0f;
+    worldClock->dayLengthSeconds = worldClock->dayLengthMinutes * 60.0f;
+    
+    
+    worldClock->elapsedTimeSeconds += msPerFrame / 1000.0f;
+    worldClock->elapsedTimeMinutes = worldClock->elapsedTimeSeconds / 60.0f;
+
+    r32 dayRatio = fmodf(worldClock->elapsedTimeSeconds, worldClock->dayLengthSeconds) / worldClock->dayLengthSeconds;
+    r32 totalGameMinutes = dayRatio * 1440.0f;
+    worldClock->gameCurrentTime.hour = (i32)floor(totalGameMinutes / 60);
+    worldClock->gameCurrentTime.minutes = (i32)floor(fmodf(totalGameMinutes, 60));
+    
+}
+
 internal v2
 GetLocationFromUI(v2 a, v2 b)
 {
@@ -206,24 +238,8 @@ UpdateCursor(r32 xChange, r32 yChange, ui_cursor* cursor, ui_element* map, game_
 {
     cursor->pos.x += xChange;
     cursor->pos.y += yChange;
-#if 0
-    r32 dX = cursor->pos.x - map->uiInfo->position.x;
-    r32 dY = cursor->pos.y - map->uiInfo->position.y;
 
-    r32 scale = 150.0f / 500.0f; //might be a good idea to store this somewhere
-
-    r32 offsetX = dX * scale;
-    r32 offsetY = dY * scale;
-
-    r32 xCenter = map->uiInfo->position.x + (map->uiInfo->size.x / 2);
-    r32 yCenter = map->uiInfo->position.y + (map->uiInfo->size.y / 2);
-
-    r32 markerX = offsetX + xCenter;
-    r32 markerY = offsetY + yCenter;
-    v2 marker = {markerX, markerY};
-#else
     v2 marker = cursor->pos;
-#endif    
     gameFrameworkCode->GameUpdateUITexture(cursor->cursorElement->uiInfo->size,
 					   marker,
 					   cursor->cursorElement->uiInfo,
@@ -944,7 +960,7 @@ CheckAndUpdateDestination(boat_entity* boat, hud* gameHUD)
 internal r32
 ProcessGamepadTurnMovement(boat_entity* boat, r32 turnSpeed, r32 triggerAverage)
 {
-    r32 triggerConstant = 0.8f;
+    r32 triggerConstant = 0.8f; //make exponential and not linear???
     r32 result = 0.0f;
     triggerConstant *= triggerAverage;
     turnSpeed *= triggerConstant;
@@ -1049,8 +1065,10 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
     texture_load_info wordSpeedUI = {"../data/textures/hud/speed_word.bmp", true};
     texture_load_info boatCourseUI = {"../data/textures/hud/course_dir_ui.bmp", true};
     texture_load_info mapCursorUI = {"../data/textures/map_cursor.bmp", true};
+    texture_load_info timeWordUI = {"../data/textures/alphabet_texture_atlas.bmp", true};
     
-    texture_load_info allTextureInfo[20] = {testPathLoadInfo, windModelTexInfo, speedometerTexInfo, boatTexInfo, uiMap, uiBoat, leftSailTut, rightSailTut, skyboxCubemap, sunImg, lbTut, rbTut, compassUI, boatDirUI, windDirUI, maxSpeedUI, wordTextureAtlasUI, wordSpeedUI, boatCourseUI, mapCursorUI};
+    
+    texture_load_info allTextureInfo[21] = {testPathLoadInfo, windModelTexInfo, speedometerTexInfo, boatTexInfo, uiMap, uiBoat, leftSailTut, rightSailTut, skyboxCubemap, sunImg, lbTut, rbTut, compassUI, boatDirUI, windDirUI, maxSpeedUI, wordTextureAtlasUI, wordSpeedUI, boatCourseUI, mapCursorUI, timeWordUI};
     
 
 
@@ -1058,7 +1076,7 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
     initData->gameTextures = gameFrameworkCode->GameLoadTextures(allTextureInfo,
 								 platformInfo->frameworkArenas.setupArena,
 								 platformInfo->frameworkArenas.perFrameArena,
-								 20,
+								 21,
 								 screenDimensions,
 								 DEBUGPlatformReadEntireFile,
 								 memoryPoolCode);
@@ -1134,7 +1152,7 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
 
     v2 windClusterSize = {359.0f, 349.0f};
     windClusterSize *= 0.5f;
-    v2 windClusterLocation = {1280.0f - 200.0f, 50.0f};
+    v2 windClusterLocation = {1280.0f - 200.0f, screenHeight - 250.0f};
     gameFrameworkCode->GameUpdateUITexture(windClusterSize,
 					   windClusterLocation,
 					   &initData->gameTextures.textures[tl_compass_ui - 1].uiInfo,
@@ -1199,7 +1217,8 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
 					   screenDimensions);
     gameHUD->speedText.uiTexture = &initData->gameTextures.textures[tl_wordatlas_ui - 1];
     gameHUD->speedText.uiInfo = &initData->gameTextures.textures[tl_wordatlas_ui - 1].uiInfo;
-
+    gameHUD->speedText.uiInfo->textElement.textSpacing = -10.8f;
+    
     char* speedText = "0.1";
     UpdateTextUI(gameHUD->speedText.uiInfo, speedText, 3);
 
@@ -1211,6 +1230,20 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
 					   screenDimensions);
 
 
+    v2 timeTextLocation = {};
+    v2 timeTextSize = {32.0f, 32.0f};
+    timeTextSize *= 0.7f;
+    gameFrameworkCode->GameUpdateUITexture(timeTextSize,
+					   timeTextLocation,
+					   &initData->gameTextures.textures[tl_timeatlas_ui - 1].uiInfo,
+					   screenDimensions);
+    gameHUD->timeText.uiTexture = &initData->gameTextures.textures[tl_timeatlas_ui - 1];
+    gameHUD->timeText.uiInfo = &initData->gameTextures.textures[tl_timeatlas_ui - 1].uiInfo;
+    gameHUD->timeText.uiInfo->textElement.textSpacing = 0.2f;
+
+    char* timeText = "00.00";
+    UpdateTextUI(gameHUD->timeText.uiInfo, timeText, 5);
+    
     SetMapPawns(gameHUD);
 
 
@@ -1542,6 +1575,7 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
 							  Identity());
     initData->skybox->textureInfo = tl_skybox;
     initData->skybox->unlit = true;
+
 
     
     return(cameraResult);
@@ -2007,6 +2041,37 @@ extern "C" SAIL_UPDATE(SailUpdate)
     Assert(padController);
     boat_entity* boat = &initData->boat; 
 
+    UpdateWorldTime(&gameState->worldClock);
+    char timeText[32];
+    if (gameState->worldClock.gameCurrentTime.hour < 10)
+    {
+	if (gameState->worldClock.gameCurrentTime.minutes < 10)
+	{
+	    snprintf(timeText, sizeof(timeText), "0%i.0%i", gameState->worldClock.gameCurrentTime.hour,
+		     gameState->worldClock.gameCurrentTime.minutes);
+	}
+	else
+	{
+	    snprintf(timeText, sizeof(timeText), "0%i.%i", gameState->worldClock.gameCurrentTime.hour,
+		     gameState->worldClock.gameCurrentTime.minutes);
+	}
+    }
+    else
+    {
+	if (gameState->worldClock.gameCurrentTime.minutes < 10)
+	{
+	    snprintf(timeText, sizeof(timeText), "%i.0%i", gameState->worldClock.gameCurrentTime.hour,
+		     gameState->worldClock.gameCurrentTime.minutes);
+	}
+	else
+	{
+	    snprintf(timeText, sizeof(timeText), "%i.%i", gameState->worldClock.gameCurrentTime.hour,
+		     gameState->worldClock.gameCurrentTime.minutes);
+	}
+    }
+
+    UpdateTextUI(gameState->gameHUD->timeText.uiInfo, timeText, 5);
+    
     if (controller || padController)
     {
 	if (controller->one.started)
