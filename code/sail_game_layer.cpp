@@ -44,6 +44,38 @@ global_variable v2 screenDimensions = {screenWidth, screenHeight};
   
  */
 
+internal v2
+GetLocationFromUI(v2 a, v2 b)
+{
+    v2 dir = a - b;
+    r32 len = Magnitude(dir);
+    v2 abNorm = Normalize(dir);
+    r32 scale = 150.0f / 500.0f;
+    v2 result = scale * len * abNorm;
+    return(result);
+}
+
+internal v2
+ConvertFromPixelCoordsToWorldSpace(v2 v, v2 uiPosition, v2 uiSize)
+{
+    r32 xCenter = uiPosition.x + (uiSize.x / 2);
+    r32 yCenter = uiPosition.y + (uiSize.y / 2);
+
+    r32 scale = 150.0f / 500.0f;
+
+    r32 invOffsetX = v.x - xCenter;
+    r32 invOffsetY = v.y - yCenter;
+
+    r32 dX = invOffsetX / scale;
+    r32 dY = invOffsetY / scale;
+
+    r32 worldX = dX + uiPosition.x;
+    r32 worldZ = dY + uiPosition.y;
+    
+    v2 result = {worldX, worldZ};
+    return(result);
+}
+
 internal void
 UpdateTextUI(ui_update* uiInfo, char* str, i32 charCount)
 {
@@ -771,7 +803,12 @@ IsInRange(r32 min, r32 max, r32 v)
     return (v < max && v > min);
 }
 
-
+inline bool32
+IsInRange(v2 min, v2 max, v2 v)
+{
+    bool32 result = (IsInRange(min.x, max.x, v.x) && IsInRange(min.y, max.y, v.y));
+    return(result);
+}
 
 internal bool32
 CheckForCompletedRotationUpdate(rotational_update update)
@@ -873,6 +910,46 @@ AddBoatRotationVariance(boat_entity* boat)
 	boat->varianceTargetYaw = boat->currTargetYaw - newRotation;
 	boat->boatRotationTimer.running = true;
     }
+}
+
+internal void
+CheckAndUpdateDestination(boat_entity* boat, hud* gameHUD)
+{
+    if (gameHUD->numOfDrawnLines == 0) return;
+    ui_lines* currentLine = &gameHUD->lines[gameHUD->currentLine];
+    v2 boatXZ = {boat->objInfo->modelTransform.location.x, boat->objInfo->modelTransform.location.z};
+    r32 marginOfError = 10.0f;
+    v2 lineMin = currentLine->worldPos - marginOfError;
+    v2 lineMax = currentLine->worldPos + marginOfError;
+    if (IsInRange(lineMin, lineMax, boatXZ))
+    {
+	(gameHUD->currentLine)++;
+	if (gameHUD->currentLine <= gameHUD->numOfDrawnLines)
+	{
+	    currentLine = &gameHUD->lines[gameHUD->currentLine];	
+	    boat->destLocation = {currentLine->worldPos.x, 0.0f, currentLine->worldPos.y, 0.0f};
+	}
+	else
+	{
+	    gameHUD->currentLine = gameHUD->numOfDrawnLines;
+	}
+    }
+    else if (!gameHUD->linesInitialized)
+    {
+	gameHUD->linesInitialized = true;
+	boat->destLocation = {currentLine->worldPos.x, 0.0f, currentLine->worldPos.y, 0.0f};
+    }
+}
+
+internal r32
+ProcessGamepadTurnMovement(boat_entity* boat, r32 turnSpeed, r32 triggerAverage)
+{
+    r32 triggerConstant = 0.8f;
+    r32 result = 0.0f;
+    triggerConstant *= triggerAverage;
+    turnSpeed *= triggerConstant;
+    result = boat->targetBoatRotations.y + turnSpeed;
+    return(result);
 }
 
 
@@ -1420,7 +1497,7 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
 	initData->boat.bottomSpeed = 1.0f;
 
 
-    initData->boat.destLocation = maroonedTransform.location;
+//    initData->boat.destLocation = maroonedTransform.location;
     
 /*
   Wind Rotational setup 
@@ -2094,16 +2171,28 @@ extern "C" SAIL_UPDATE(SailUpdate)
 
 		if (boat->boatCameraMode == bcm_steer)
 		{
-		    if (controller->moveLeft.endedDown || padController->moveLeft.endedDown)
+
+		    if (controller->moveLeft.endedDown)
 		    {
 
 			boat->currTargetYaw = boat->targetBoatRotations.y + turnSpeed;
 		    }
+		    else if (padController->leftTrigger.endedDown)
+		    {
+			boat->currTargetYaw = ProcessGamepadTurnMovement(boat, turnSpeed,
+									 padController->leftTriggerAverage);
+
+		    }
 
 		
-		    if (controller->moveRight.endedDown || padController->moveRight.endedDown)
+		    if (controller->moveRight.endedDown || padController->rightTrigger.endedDown)
 		    {
 			boat->currTargetYaw = boat->targetBoatRotations.y - turnSpeed;
+		    }
+		    else if (padController->rightTrigger.endedDown)
+		    {
+			boat->currTargetYaw = ProcessGamepadTurnMovement(boat, -turnSpeed,
+									 padController->rightTriggerAverage);
 		    }
 		}
 		else if (boat->boatCameraMode == bcm_winch)
@@ -2115,6 +2204,17 @@ extern "C" SAIL_UPDATE(SailUpdate)
 		      then make a input buffer to make it so you have to 'wind' the sails in each direction
 		      using 'asdwa' or 'dsawd' depending on which way you want to rotate the sail
 		    */
+
+		    if (padController->leftTrigger.endedDown)
+		    {
+			boat->currTargetYaw = ProcessGamepadTurnMovement(boat, turnSpeed,
+									  padController->leftTriggerAverage);
+		    }
+		    if (padController->rightTrigger.endedDown)
+		    {
+			boat->currTargetYaw = ProcessGamepadTurnMovement(boat, -turnSpeed,
+									 padController->rightTriggerAverage);
+		    }
 
 		    r32 sailDeg = 0.5f;
 		    if (boat->staticCamLocation == static_cam_location::scl_left)
@@ -2185,6 +2285,8 @@ extern "C" SAIL_UPDATE(SailUpdate)
 			adjustedCursor.x = gameState->gameHUD->cursor.pos.x + (cursorSize.x * 0.5f);
 			adjustedCursor.y = gameState->gameHUD->cursor.pos.y + ((cursorSize.y));	
 
+			v2 relativeCursor = adjustedCursor - gameState->gameHUD->map.uiInfo->position;
+			
 			if (gameState->gameHUD->numOfDrawnLines > 0)
 			{
 			    //prev position of line is the start
@@ -2192,14 +2294,31 @@ extern "C" SAIL_UPDATE(SailUpdate)
 			    v2 prevEnd = gameState->gameHUD->lines[gameState->gameHUD->numOfDrawnLines - 1].b;
 			    gameState->gameHUD->lines[gameState->gameHUD->numOfDrawnLines] =
 				DefineUILineSegment(prevEnd, adjustedCursor);
+
+			    ui_lines* currentLine = &gameState->gameHUD->lines[gameState->gameHUD->numOfDrawnLines];
+
+			    v2 point = ConvertFromPixelCoordsToWorldSpace(relativeCursor,
+									  gameState->gameHUD->map.uiInfo->position,
+									  gameState->gameHUD->map.uiInfo->size);
+			    
+			    gameState->gameHUD->lines[gameState->gameHUD->numOfDrawnLines].worldPos = point;
+
 			}
 			else
 			{
-			    adjustedCursor.x = gameState->gameHUD->cursor.pos.x + (cursorSize.x * 0.5f);
-			    adjustedCursor.y = gameState->gameHUD->cursor.pos.y + ((cursorSize.y));
-
+			    ui_lines* currentLine = &gameState->gameHUD->lines[gameState->gameHUD->numOfDrawnLines];
 			    gameState->gameHUD->lines[gameState->gameHUD->numOfDrawnLines] =
 				DefineUILineSegment(gameState->gameHUD->mapPlayer.ndcPos, adjustedCursor);
+			    
+
+			    v2 point = ConvertFromPixelCoordsToWorldSpace(relativeCursor,
+									  gameState->gameHUD->map.uiInfo->position,
+									  gameState->gameHUD->map.uiInfo->size);
+			    
+
+			    gameState->gameHUD->lines[gameState->gameHUD->numOfDrawnLines].worldPos = point;
+				
+				
 			}
 			(gameState->gameHUD->numOfDrawnLines)++;
 		    }
@@ -2276,6 +2395,13 @@ extern "C" SAIL_UPDATE(SailUpdate)
 	    v2 boatXZ = {boat->forward.x, boat->forward.z};
 	    //Destination course update
 
+	    /*
+	      Destination gets the location of a cursor location
+	      Once they arrive at that location, we set the new destination to be the location next in the list
+	     */
+
+	    
+	    
 	    v2 destXZ = {boat->destLocation.x, boat->destLocation.z};
 	    v2 boatLocXZ = {boatPos.x, boatPos.z};
 	    v2 toDest = GetDirectionVectorFromTwoPoints(destXZ, boatLocXZ);
@@ -2325,7 +2451,7 @@ extern "C" SAIL_UPDATE(SailUpdate)
 	}
     }
 
- gameFrameworkCode->GameUpdateCamera(camera);
+    gameFrameworkCode->GameUpdateCamera(camera);
     //add check if tutorial complete with tutorialComplete bool that you haven't made yet
 
 
@@ -2336,6 +2462,7 @@ extern "C" SAIL_UPDATE(SailUpdate)
     boat->sailInfo.windDirection = boat->sailInfo.windRotation.vCurrent;
 
 
+    CheckAndUpdateDestination(boat, gameState->gameHUD);
     //Update our map
     //Convert world location to screen locations
     //Convert screen locations to local screen location
@@ -2361,6 +2488,10 @@ extern "C" SAIL_UPDATE(SailUpdate)
 
 	v2 marker = {markerX, markerY};
 
+	v2 testing = ConvertFromPixelCoordsToWorldSpace(marker,
+							gameState->gameHUD->map.uiInfo->position,
+							gameState->gameHUD->map.uiInfo->size);
+	
 	//normalize??
 	v2 uvRange = {0.0f, 1.0f};
 	v2 playerSize = gameState->gameHUD->mapPlayer.uiInfo->size;

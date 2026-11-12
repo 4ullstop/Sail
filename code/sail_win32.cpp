@@ -113,7 +113,7 @@ UpdateLineSegmentUI(hud* gameHUD, sail_constant_buffers* cbs)
 	newLine.a = FromV2ToXMFLOAT2(uiLine->a);
 	newLine.b = FromV2ToXMFLOAT2(uiLine->b);
 
-	DirectX::XMVECTOR rgbtV = DirectX::XMVectorSet(100.0f, 0.0f, 0.0f, 0.0f);
+	DirectX::XMVECTOR rgbtV = DirectX::XMVectorSet(1.0f, 1.0f, 0.0f, 3.0f);
 	DirectX::XMStoreFloat4(&newLine.colorThick,
 			       rgbtV);
 
@@ -765,25 +765,28 @@ RenderText2D(texture_buffers* texture, hud* gameHUD, shaders* shader)
 internal void
 RenderLineSegments(hud* gameHUD, sail_constant_buffers* cbs, shaders* shader)
 {
-    UINT stride = sizeof(ui_vertex);
-    UINT offset = 0;
-
-    UpdateLineSegmentUI(gameHUD, cbs);
-    for (i32 i = 0; i < gameHUD->numOfDrawnLines; i++)
+    if (!gameHUD->mapVisible)
     {
-	context->OMSetDepthStencilState(disableDepthState, 0);
-	context->OMSetBlendState(alphaBlendState, NULL, 0xFFFFFFFF);
-	
-	context->VSSetShader(shader->uiVertexShader, nullptr, 0);
-	context->IASetInputLayout(shader->uiInputLayout);
-	context->PSSetShader(shader->linePixelShader, nullptr, 0);
-	context->PSSetConstantBuffers(0, 1, &cbs->lineSegmentBuffers[i]);
-	
-	//Set index buffer use uiIndexBuffer
-	context->IASetVertexBuffers(0, 1, &uiVertexBuffer, &stride, &offset);
-	context->IASetIndexBuffer(uiIndexBuffer, DXGI_FORMAT_R16_UINT, 0);
+	UINT stride = sizeof(ui_vertex);
+	UINT offset = 0;
 
-	context->DrawIndexed(6, 0, 0);
+	UpdateLineSegmentUI(gameHUD, cbs);
+	for (i32 i = 0; i < gameHUD->numOfDrawnLines; i++)
+	{
+	    context->OMSetDepthStencilState(disableDepthState, 0);
+	    context->OMSetBlendState(alphaBlendState, NULL, 0xFFFFFFFF);
+	
+	    context->VSSetShader(shader->uiVertexShader, nullptr, 0);
+	    context->IASetInputLayout(shader->uiInputLayout);
+	    context->PSSetShader(shader->linePixelShader, nullptr, 0);
+	    context->PSSetConstantBuffers(0, 1, &cbs->lineSegmentBuffers[i]);
+	
+	    //Set index buffer use uiIndexBuffer
+	    context->IASetVertexBuffers(0, 1, &uiVertexBuffer, &stride, &offset);
+	    context->IASetIndexBuffer(uiIndexBuffer, DXGI_FORMAT_R16_UINT, 0);
+
+	    context->DrawIndexed(6, 0, 0);
+	}
     }
 }
 

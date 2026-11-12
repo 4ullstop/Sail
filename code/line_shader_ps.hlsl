@@ -2,7 +2,6 @@ cbuffer LineSegment : register(b0)
 {
 	float2 a;
 	float2 b;
-	float2 p;
 	float4 lineColor;
 };
 
@@ -26,7 +25,7 @@ float4 PS(PS_INPUT input) : SV_TARGET
 	float2 pixelPos = input.position.xy;
 	float dist = LineSegment2DSDF(pixelPos, a, b);
 	float4 colorThick = float4(0.0f, 0.0f, 0.0f, 1.0f);
-	float halfThickness = colorThick.a * 0.5f;//stored thickness in alpha section of color
+	float halfThickness = lineColor.a * 0.5f;//stored thickness in alpha section of color
 
 	float alpha = 1.0f - smoothstep(halfThickness - 0.002, halfThickness + 0.002, dist);
 	if (alpha <= 0.0f) discard;

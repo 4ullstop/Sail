@@ -69,6 +69,7 @@ struct ui_lines
 {
     v2 a;
     v2 b;
+    v2 worldPos;
 };
 
 
@@ -115,6 +116,8 @@ struct hud
     ui_lines lines[MAXLINECOUNT];
     i32 numOfDrawnLines;
     i32 prevNumOfDrawnLines;
+    i32 currentLine;
+    bool32 linesInitialized;
 };
 
 
