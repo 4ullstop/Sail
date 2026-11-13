@@ -79,7 +79,7 @@ struct hud
     text_atlas_info textAtlas;
     union
     {
-	ui_element uiElements[15];
+	ui_element uiElements[18];
 	struct
 	{
 	    ui_element rightBumper;
@@ -103,6 +103,12 @@ struct hud
 	    ui_element speedText;
 
 	    ui_element timeText;
+
+	    ui_element windTimeHeader;
+	    ui_element windTime_01;	
+	    ui_element windTime_02;	
+	    ui_element windTime_03;
+	    
 	    
 	    ui_element terminator;
 	};
@@ -110,7 +116,7 @@ struct hud
 
     //pawns includes the map itself
     i32 numOfMapPawns;
-    ui_element* mapPawns[3];
+    ui_element* mapPawns[7];
     bool32 mapVisible;
     ui_cursor cursor;
 
@@ -493,7 +499,8 @@ MapValue(v2 oRange, v2 nRange, r32 value)
 inline i32
 MapValue(v2I oRange, v2I nRange, i32 value)
 {
-    i32 result = (i32)((oRange.x + value) * ((nRange.y - nRange.x) / (oRange.y - oRange.x)));
+    r32 t = ((r32)value - (r32)oRange.x) / ((r32)oRange.y - (r32)oRange.x);
+    i32 result = (i32)roundf((r32)nRange.x + t * ((r32)nRange.y - (r32)nRange.x));
     return(result);
 }
 

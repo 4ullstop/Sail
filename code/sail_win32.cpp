@@ -650,19 +650,26 @@ internal uv_offset_result
 UVOffsetForCharacter(char character, text_atlas_info* textAtlas)
 {
     uv_offset_result result = {};
-    i32 ch = character - '0';
+
+    i32 ch = (i32)character;
 
     i32 textureIndex = 0;
+
     if (ch >= 65)
     {
-	textureIndex = MapValue(textAtlas->charRange, textAtlas->asciiCharRange, ch);
+	textureIndex = MapValue(textAtlas->asciiCharRange, textAtlas->charRange, ch);
+	textureIndex--;
     }
     else
     {
-	textureIndex = MapValue(textAtlas->numRange, textAtlas->asciiNumRange, ch);
-	textureIndex++;
+	textureIndex = MapValue(textAtlas->asciiNumRange, textAtlas->numRange, ch);
+	textureIndex--;
     }
-
+    //yea ik this is slimey but idc
+    if (ch == 64)
+    {
+	textureIndex = 27;
+    }
 
     Assert(textAtlas->refWidth == textAtlas->refHeight); //rn too lazy this should be the case all times
     Assert(textAtlas->width == textAtlas->height);
@@ -718,10 +725,16 @@ AssignNewUVS(ui_vertex* result, uv_offset_result uv, r32 newOffset, ui_vertex* o
     result[3].uv[1] = uv.highUV.y;
 }
 
+
+/*
+  In reality, we should only use one texture for text, the texture atlas,
+  There doesn't need to be a separate texture per text object unless we are like changing the
+  font or something, this way I don't need 30 different texture atlases for different text elements, we just
+  reference one
+ */
 internal void
-RenderText2D(texture_buffers* texture, hud* gameHUD, shaders* shader)
+RenderText2D(texture_buffers* texture, ui_update* uiInfo, hud* gameHUD, shaders* shader)
 {
-    ui_update* uiInfo = texture->uiInfo;
     for (i32 i = 0; i < uiInfo->textElement.numOfCharacters; i++)
     {
 	context->OMSetDepthStencilState(disableDepthState, 0);
@@ -746,8 +759,8 @@ RenderText2D(texture_buffers* texture, hud* gameHUD, shaders* shader)
 	{
 	    for (i32 k = 0; k < 2; k++)
 	    {
-		texture->uiVertexBufferData[j].uv[k] = texture->uiInfo->ndcInfo[j].uv[k];
-		texture->uiVertexBufferData[j].position[k] = texture->uiInfo->ndcInfo[j].position[k];
+		texture->uiVertexBufferData[j].uv[k] = uiInfo->ndcInfo[j].uv[k];
+		texture->uiVertexBufferData[j].position[k] = uiInfo->ndcInfo[j].position[k];
 	    }
 	}
 	context->UpdateSubresource(texture->uiVertexBuffer, 0, nullptr, texture->uiVertexBufferData, 0, 0);
@@ -793,6 +806,8 @@ RenderLineSegments(hud* gameHUD, sail_constant_buffers* cbs, shaders* shader)
 internal void
 Render2D(shaders* shader, win32_spawnable_objs* win32Objs, game_state* gameState, sail_constant_buffers* cbs)
 {
+    texture_buffers* textTexture = &win32Objs->textureBuffers[tl_wordatlas_ui - 1];
+
     for (i32 i = 0; i < win32Objs->numOf2DTextures; i++)
     {
 	
@@ -846,7 +861,7 @@ Render2D(shaders* shader, win32_spawnable_objs* win32Objs, game_state* gameState
 	    }
 	    else
 	    {
-		RenderText2D(texture, gameState->gameHUD, shader);
+		RenderText2D(textTexture, texture->uiInfo, gameState->gameHUD, shader);
 	    }
 	}
     }

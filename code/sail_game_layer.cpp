@@ -44,6 +44,83 @@ global_variable v2 screenDimensions = {screenWidth, screenHeight};
   
  */
 
+internal void
+FillTimeStringBuffer(char* buffer, size_t sizeOfBuffer, i32 hours, i32 minutes)
+{
+    if (hours < 10)
+    {
+	if (minutes < 10)
+	{
+	    snprintf(buffer, sizeof(sizeOfBuffer), "0%i.0%i", hours,
+		     minutes);
+	}
+	else
+	{
+	    snprintf(buffer, sizeof(sizeOfBuffer), "0%i.%i", hours,
+		     minutes);
+	}
+    }
+    else
+    {
+	if (minutes < 10)
+	{
+	    snprintf(buffer, sizeof(sizeOfBuffer), "%i.0%i", hours,
+		     minutes);
+	}
+	else
+	{
+	    snprintf(buffer, sizeof(sizeOfBuffer), "%i.%i", hours,
+		     minutes);
+	}
+    }
+}
+
+internal void
+FillTimeStringBuffer(char* buffer, size_t sizeOfBuffer, i32 hours, i32 minutes, r32 direction)
+{
+    if (hours < 10)
+    {
+	if (minutes < 10)
+	{
+	    snprintf(buffer, sizeOfBuffer, "0%i.0%i@@%f", hours,
+		     minutes, direction);
+	}
+	else
+	{
+	    snprintf(buffer, sizeOfBuffer, "0%i.%i@@%f", hours,
+		     minutes, direction);
+	}
+    }
+    else
+    {
+	if (minutes < 10)
+	{
+	    snprintf(buffer, sizeOfBuffer, "%i.0%i@@%f", hours,
+		     minutes, direction);
+	}
+	else
+	{
+	    snprintf(buffer, sizeOfBuffer,  "%i.%i@@%f", hours,
+		     minutes, direction);
+	}
+    }
+}
+
+internal void
+SetWindChanges(sailing* sailInfo)
+{
+    sailInfo->windChanges[0].hour = 3;
+    sailInfo->windChanges[0].minute = 0;
+    sailInfo->windChanges[0].newWindDirection = 45.0f;
+
+    sailInfo->windChanges[1].hour = 6;
+    sailInfo->windChanges[1].minute = 0;
+    sailInfo->windChanges[1].newWindDirection = 10.0f;
+
+    sailInfo->windChanges[2].hour = 8;
+    sailInfo->windChanges[2].minute = 0;
+    sailInfo->windChanges[2].newWindDirection = 200.0f;    
+}
 
 internal void
 InitWorldTime(world_clock* worldClock)
@@ -51,12 +128,6 @@ InitWorldTime(world_clock* worldClock)
     worldClock->dayLengthMinutes = 10.0f;//10 minutes per day
     worldClock->dayLengthSeconds = worldClock->dayLengthMinutes * 60.0f;
     worldClock->gameCurrentTime = {};
-}
-
-internal void
-UpdateWorldTimeUI(world_clock* clock)
-{
-
 }
 
 internal void
@@ -121,6 +192,23 @@ UpdateTextUI(ui_update* uiInfo, char* str, i32 charCount)
 }
 
 internal void
+UpdateWindTimesUI(sailing* sailInfo, hud* gameHUD)
+{
+    char size[] =  "%i.%i  %f";
+    ui_update* textUpdates[3];
+    textUpdates[0] = gameHUD->windTime_01.uiInfo;
+    textUpdates[1] = gameHUD->windTime_02.uiInfo;
+    textUpdates[2] = gameHUD->windTime_03.uiInfo;    
+    
+    for (i32 i = 0; i < 3; i++)
+    {
+	char convertedTime[32];	
+	FillTimeStringBuffer(convertedTime, sizeof(convertedTime), sailInfo->windChanges[i].hour, sailInfo->windChanges[i].minute, sailInfo->windChanges[i].newWindDirection);
+	UpdateTextUI(textUpdates[i], convertedTime, sizeof(size));
+    }
+}
+
+internal void
 TextAtlasSetup(hud* HUD)
 {
     text_atlas_info* textAtlas = &HUD->textAtlas;
@@ -138,10 +226,10 @@ TextAtlasSetup(hud* HUD)
     textAtlas->refWidth = textAtlas->width / textAtlas->columns;
     textAtlas->refHeight = textAtlas->height / textAtlas->rows;
 
-    v2I charRange = {0, 25};
+    v2I charRange = {0, 27};
     v2I numRange = {27, 38};
 
-    v2I asciiCharRange = {65, 90};
+    v2I asciiCharRange = {64, 91};
     v2I asciiNumRange = {46, 57};
 
     textAtlas->charRange = charRange;
@@ -218,10 +306,14 @@ SetMapVisibility(bool32 hidden, hud* gameHUD)
 internal void
 SetMapPawns(hud* gameHUD)
 {
-    gameHUD->numOfMapPawns = 3;
+    gameHUD->numOfMapPawns = 7;
     gameHUD->mapPawns[0] = &gameHUD->map;
     gameHUD->mapPawns[1] = &gameHUD->mapPlayer;
     gameHUD->mapPawns[2] = &gameHUD->mapCursor;
+    gameHUD->mapPawns[3] = &gameHUD->windTime_01;
+    gameHUD->mapPawns[4] = &gameHUD->windTime_02;
+    gameHUD->mapPawns[5] = &gameHUD->windTime_03;
+    gameHUD->mapPawns[6] = &gameHUD->windTimeHeader;
     
     SetMapVisibility(true, gameHUD);
 }
@@ -813,6 +905,25 @@ RotateWindDirection(sailing* sailInfo, r32 rotation, bool32 isMajorChange)
 	}
 }
 
+internal void
+CheckForWindDirectionUpdates(sailing* sailInfo, world_clock* worldClock)
+{
+    wind_change* change = nullptr;
+    for (i32 i = 0; i < 3; i++)
+    {
+	if ((sailInfo->windChanges[i].hour == worldClock->gameCurrentTime.hour) &&
+	    (sailInfo->windChanges[i].minute == worldClock->gameCurrentTime.minutes))
+	{
+	    change = &sailInfo->windChanges[i];
+	    break;
+	}
+    }
+    if (change)
+    {
+	RotateWindDirection(sailInfo, change->newWindDirection, true);
+    }
+}
+
 inline bool32
 IsInRange(r32 min, r32 max, r32 v)
 {
@@ -1066,9 +1177,15 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
     texture_load_info boatCourseUI = {"../data/textures/hud/course_dir_ui.bmp", true};
     texture_load_info mapCursorUI = {"../data/textures/map_cursor.bmp", true};
     texture_load_info timeWordUI = {"../data/textures/alphabet_texture_atlas.bmp", true};
+    texture_load_info windTimes_01 = {"../data/textures/alphabet_texture_atlas.bmp", true};
+    texture_load_info windTimes_02 = {"../data/textures/alphabet_texture_atlas.bmp", true};
+    texture_load_info windTimes_03 = {"../data/textures/alphabet_texture_atlas.bmp", true};
+    texture_load_info windTimeLayout = {"../data/textures/windtime_tablelayout.bmp", true};
+
     
+
     
-    texture_load_info allTextureInfo[21] = {testPathLoadInfo, windModelTexInfo, speedometerTexInfo, boatTexInfo, uiMap, uiBoat, leftSailTut, rightSailTut, skyboxCubemap, sunImg, lbTut, rbTut, compassUI, boatDirUI, windDirUI, maxSpeedUI, wordTextureAtlasUI, wordSpeedUI, boatCourseUI, mapCursorUI, timeWordUI};
+    texture_load_info allTextureInfo[25] = {testPathLoadInfo, windModelTexInfo, speedometerTexInfo, boatTexInfo, uiMap, uiBoat, leftSailTut, rightSailTut, skyboxCubemap, sunImg, lbTut, rbTut, compassUI, boatDirUI, windDirUI, maxSpeedUI, wordTextureAtlasUI, wordSpeedUI, boatCourseUI, mapCursorUI, timeWordUI, windTimes_01, windTimes_02, windTimes_03, windTimeLayout};
     
 
 
@@ -1076,7 +1193,7 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
     initData->gameTextures = gameFrameworkCode->GameLoadTextures(allTextureInfo,
 								 platformInfo->frameworkArenas.setupArena,
 								 platformInfo->frameworkArenas.perFrameArena,
-								 21,
+								 25,
 								 screenDimensions,
 								 DEBUGPlatformReadEntireFile,
 								 memoryPoolCode);
@@ -1244,9 +1361,51 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
     char* timeText = "00.00";
     UpdateTextUI(gameHUD->timeText.uiInfo, timeText, 5);
     
+
+
+    v2 windTimeLocation = {mapSize.x + testLocation.x, 50.0f};
+    v2 windTimeSize = {32.0f, 32.0f};
+    windTimeSize *= 0.4f;
+    gameFrameworkCode->GameUpdateUITexture(windTimeSize,
+					   windTimeLocation,
+					   &initData->gameTextures.textures[tl_windtime_01_ui - 1].uiInfo,
+					   screenDimensions);
+    gameHUD->windTime_01.uiTexture = &initData->gameTextures.textures[tl_windtime_01_ui - 1];
+    gameHUD->windTime_01.uiInfo = &initData->gameTextures.textures[tl_windtime_01_ui - 1].uiInfo;
+
+    UpdateTextUI(gameHUD->windTime_01.uiInfo, timeText, 5);
+
+    windTimeLocation.y += 50.0f;
+    gameFrameworkCode->GameUpdateUITexture(windTimeSize,
+					   windTimeLocation,
+					   &initData->gameTextures.textures[tl_windtime_02_ui - 1].uiInfo,
+					   screenDimensions);
+    gameHUD->windTime_02.uiTexture = &initData->gameTextures.textures[tl_windtime_02_ui - 1];
+    gameHUD->windTime_02.uiInfo = &initData->gameTextures.textures[tl_windtime_02_ui - 1].uiInfo;
+    UpdateTextUI(gameHUD->windTime_02.uiInfo, timeText, 5);
+
+    windTimeLocation.y += 50.0f;    
+    gameFrameworkCode->GameUpdateUITexture(windTimeSize,
+					   windTimeLocation,
+					   &initData->gameTextures.textures[tl_windtime_03_ui - 1].uiInfo,
+					   screenDimensions);
+    gameHUD->windTime_03.uiTexture = &initData->gameTextures.textures[tl_windtime_03_ui - 1];
+    gameHUD->windTime_03.uiInfo = &initData->gameTextures.textures[tl_windtime_03_ui - 1].uiInfo;    
+    UpdateTextUI(gameHUD->windTime_03.uiInfo, timeText, 5);
+
+    v2 windLayoutSize = {220.0f, 99.0f};
+    v2 windLayoutLocation = {mapSize.x + testLocation.x - 10.0f, -20.0};
+    gameFrameworkCode->GameUpdateUITexture(windLayoutSize,
+					   windLayoutLocation,
+					   &initData->gameTextures.textures[tl_windtime_layout_ui - 1].uiInfo,
+					   screenDimensions);
+    gameHUD->windTimeHeader.uiTexture = &initData->gameTextures.textures[tl_windtime_layout_ui - 1];
+    gameHUD->windTimeHeader.uiInfo = &initData->gameTextures.textures[tl_windtime_layout_ui - 1].uiInfo;
+
+
+    
     SetMapPawns(gameHUD);
-
-
+    
     //Game models
     
     transform sunTransform = {};
@@ -1543,8 +1702,10 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
 	initData->boat.sailInfo.windRotation.eCurrentRotations = FromV4ToV3Rotations(GetEulerFromForwardD(initData->boat.sailInfo.windDirection));
     initData->boat.sailInfo.windRotation.lerpSpeed = 0.5f;
 
-    
+    SetWindChanges(&initData->boat.sailInfo);
 
+    UpdateWindTimesUI(&initData->boat.sailInfo, gameHUD);
+    
 /*
   Wave Rotation setup
  */
@@ -2043,34 +2204,16 @@ extern "C" SAIL_UPDATE(SailUpdate)
 
     UpdateWorldTime(&gameState->worldClock);
     char timeText[32];
-    if (gameState->worldClock.gameCurrentTime.hour < 10)
-    {
-	if (gameState->worldClock.gameCurrentTime.minutes < 10)
-	{
-	    snprintf(timeText, sizeof(timeText), "0%i.0%i", gameState->worldClock.gameCurrentTime.hour,
-		     gameState->worldClock.gameCurrentTime.minutes);
-	}
-	else
-	{
-	    snprintf(timeText, sizeof(timeText), "0%i.%i", gameState->worldClock.gameCurrentTime.hour,
-		     gameState->worldClock.gameCurrentTime.minutes);
-	}
-    }
-    else
-    {
-	if (gameState->worldClock.gameCurrentTime.minutes < 10)
-	{
-	    snprintf(timeText, sizeof(timeText), "%i.0%i", gameState->worldClock.gameCurrentTime.hour,
-		     gameState->worldClock.gameCurrentTime.minutes);
-	}
-	else
-	{
-	    snprintf(timeText, sizeof(timeText), "%i.%i", gameState->worldClock.gameCurrentTime.hour,
-		     gameState->worldClock.gameCurrentTime.minutes);
-	}
-    }
+
+
+    FillTimeStringBuffer(timeText, sizeof(timeText), gameState->worldClock.gameCurrentTime.hour,
+			 gameState->worldClock.gameCurrentTime.minutes);
 
     UpdateTextUI(gameState->gameHUD->timeText.uiInfo, timeText, 5);
+
+    CheckForWindDirectionUpdates(&boat->sailInfo, &gameState->worldClock);
+
+
     
     if (controller || padController)
     {
