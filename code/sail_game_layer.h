@@ -212,20 +212,37 @@ struct sail_type
     angle_comparison sailToBoat;
 };
 
-struct rotational_update
+typedef struct updates
 {
-    v3 eTargetRotations;
-    v3 eCurrentRotations;
-    v3 eStartRotations;
-    bool32 inRotation;
+    union
+    {
+	struct
+	{
+	    v3 eTargetRotations;
+	    v3 eCurrentRotations;
+	    v3 eStartRotations;
+	    bool32 inRotation;
+	    bool32 resetStartRotation;	    
+	};
+	struct
+	{
+	    v3 vTargetLocations;
+	    v3 vCurrentLocations;
+	    v3 vStartLocations;
+	    bool32 inMovement;
+	    bool32 resetStartLocation;
+	};
+    };
+
+
     r32 currentLerp;
     r32 lerpSpeed;
 
     v4 vCurrent;
     v4 qCurrent;
 
-    bool32 resetStartRotation;
-};
+
+} rotational_update, location_update;
 
 
 struct timer
@@ -430,7 +447,8 @@ struct boat_entity
 
     rotational_update rotationUpdate;
 
-
+    v4 oceanGridLocation;
+    location_update oceanGridUpdate;
 };
 
 struct joystick_rotation

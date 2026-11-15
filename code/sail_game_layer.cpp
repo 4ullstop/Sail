@@ -1701,6 +1701,7 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
 	initData->boat.sailInfo.windRotation.eTargetRotations = 
 	initData->boat.sailInfo.windRotation.eCurrentRotations = FromV4ToV3Rotations(GetEulerFromForwardD(initData->boat.sailInfo.windDirection));
     initData->boat.sailInfo.windRotation.lerpSpeed = 0.5f;
+    initData->boat.oceanGridUpdate.lerpSpeed = 0.5f;
 
     SetWindChanges(&initData->boat.sailInfo);
 
@@ -2188,6 +2189,67 @@ DebugInputs(game_controller_input* keyboard, game_controller_input* gamePad, boa
     }
 }
 
+internal void
+LerpUpdateLocationXZ(location_update* inLoc)
+{
+    if (inLoc->inMovement)
+    {
+	lerp_update lerpResultX = LerpUpdateValue(inLoc->lerpSpeed,
+						 inLoc->currentLerp,
+						 inLoc->vStartLocations.x,
+						 inLoc->vTargetLocations.x);
+	inLoc->currentLerp = lerpResultX.lerpP;
+	inLoc->vCurrentLocations.x = lerpResultX.value;
+
+
+	lerp_update lerpResultZ = LerpUpdateValue(inLoc->lerpSpeed,
+						  inLoc->currentLerp,
+						  inLoc->vStartLocations.z,
+						  inLoc->vTargetLocations.z);
+
+
+	inLoc->vCurrentLocations.z = lerpResultZ.value;
+	inLoc->inMovement = lerpResultX.lerpRunning;
+
+
+    }
+    else if (((inLoc->vTargetLocations.x != inLoc->vCurrentLocations.x) || inLoc->vTargetLocations.z != inLoc->vCurrentLocations.z) && (!inLoc->inMovement))
+    {
+	inLoc->currentLerp = 0.0f;
+	inLoc->inMovement = true;
+	if (!inLoc->resetStartLocation)
+	{
+	    inLoc->vStartLocations = inLoc->vCurrentLocations;
+	}
+    }
+}
+
+    
+internal void
+TeleportOceanGrid(boat_entity* boat)
+{
+    LerpUpdateLocationXZ(&boat->oceanGridUpdate);
+    boat->oceanGridLocation = {boat->oceanGridUpdate.vCurrentLocations.x, boat->oceanGridLocation.y,
+	boat->oceanGridUpdate.vCurrentLocations.z};
+
+    r32 incidentRadius = 10.0f;
+    v4 boatLocation = boat->objInfo->modelTransform.location;
+    v4 currentOceanLocation = boat->oceanGridLocation;
+    v2 boatXZ = {boatLocation.x, boatLocation.z};
+    v2 currentOceanXZ = {currentOceanLocation.x, currentOceanLocation.z};
+    //Get the distance between the two
+    v2 distXZ = boatXZ - currentOceanXZ;
+    if ((distXZ.x > incidentRadius)  || (distXZ.y > incidentRadius) ||
+	(distXZ.x < -incidentRadius) || (distXZ.y < -incidentRadius))
+    {
+	if (!boat->oceanGridUpdate.inMovement)
+	{
+	    boat->oceanGridUpdate.vTargetLocations = {boatLocation.x, currentOceanLocation.y, boatLocation.z};
+	}
+    }
+
+}
+
 #include "scripting.cpp"
 #include "sail_data_collection.cpp"
 
@@ -2288,11 +2350,17 @@ extern "C" SAIL_UPDATE(SailUpdate)
 	    else
 	    {
 		v4 waveDir = GetForwardVector(boat->waveInfo.properties.averageWaveDir, 0.0f);
-
 		newLocation = boat->objInfo->modelTransform.location + (waveDir * velocity);
+
 	    }
 
-	    boat->objInfo->modelTransform.location = boat->objInfo->modelTransform.location + (boat->forward * velocity);	    
+	    boat->objInfo->modelTransform.location = boat->objInfo->modelTransform.location + (boat->forward * velocity);
+
+
+	    
+
+
+
 	    boat->objInfo->modelMatrix = CreateModelMatrix(boat->objInfo->modelTransform.scale,
 							   boat->objInfo->modelTransform.rotation,
 							   boat->objInfo->modelTransform.location);

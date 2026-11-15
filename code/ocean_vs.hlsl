@@ -38,12 +38,16 @@ cbuffer ConstantSineWaves : register(b2)
 	float4x4 phase;
 	float4x4 directions;
 }
-	
+
+#define USE_WORLD 1
+
 VS_OUTPUT main(VS_INPUT input)
 {
 	VS_OUTPUT output;
 	float4 pos = float4(input.vPos, 1.0f);
-
+#if USE_WORLD	
+	pos = mul(pos, modelWorld);
+#endif
 	float totalY = 0.0f;
 	float dYdx = 0.0f;
 	float dYdz = 0.0f;
@@ -76,14 +80,23 @@ VS_OUTPUT main(VS_INPUT input)
 
 	float3 objectNormal = normalize(float3(-dYdx, 1.0f, -dYdz));
 
+#if USE_WORLD
+	float3 worldNormal = objectNormal;
+	float4 viewPos = mul(pos, view);	
+#else
 	float3 worldNormal = normalize(mul(objectNormal, (float3x3)modelWorld));
-
 	float4 worldPos = mul(pos, modelWorld);
 	float4 viewPos = mul(worldPos, view);
+#endif
+
+
+
+
 	float4 projPos = mul(viewPos, projection);
 
 
 	output.position = projPos;
+
 	output.color = float4(input.vColor, 1.0f);
 	output.texCoord = input.texCoord;
 	output.normal = float4(worldNormal, 0.0f);

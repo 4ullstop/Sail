@@ -274,10 +274,10 @@ CreateOceanGrid(memory_arena* arena)
 						oceanRot,
 						oceanLoc);
     oceanGrid.oceanModelMat = oceanGrid.oceanModelMat * Identity();
-    oceanGrid.sliceWidth = 600;
-    oceanGrid.sliceLength = 600;
-    oceanGrid.width = 200.0f;
-    oceanGrid.length = 200.0f;
+    oceanGrid.sliceWidth = 1200;
+    oceanGrid.sliceLength = 1200;
+    oceanGrid.width = 400.0f;
+    oceanGrid.length = 400.0f;
 
     u32 vertexCountX = oceanGrid.sliceWidth + 1;
     u32 vertexCountZ = oceanGrid.sliceLength + 1;
@@ -1770,6 +1770,9 @@ int CALLBACK WinMain(HINSTANCE hInstance,
 
 	    game_state gameState = {};
 	    gameState.gameHUD = &gameHUD;
+
+	    boat_entity* boat = &sailInitData.boat;
+	    boat->oceanGridLocation = {0.0f, -1.4f, 0.0f, 0.0f};
 	    
 	    if (RegisterRawInputDevices(rid, 1, sizeof(rid[0])) == FALSE)
 	    {
@@ -1816,17 +1819,25 @@ int CALLBACK WinMain(HINSTANCE hInstance,
 		SailUpdate(&gameFrameworkCode, &memoryPoolCode, newInput, &gameCamera, deltaTime, &sailInitData, &gameState);
 
 
-		boat_entity* boat = &sailInitData.boat;
-		sail_type* main = &boat->sailInfo.mainSail;
 
+		sail_type* main = &boat->sailInfo.mainSail;
+		
+#if 1
 		v4 oceanNewLoc = {boat->objInfo->modelTransform.location.x, -1.4f, boat->objInfo->modelTransform.location.z, 1.0f};
 		v4 oceanScale = {1.0f, 1.0f, 1.0f, 1.0f};
 		v4 oceanRotation = QuaternionIdentity();
 		oceanGrid.oceanModelMat = CreateModelMatrix(oceanScale,
 							oceanRotation,
 							oceanNewLoc);
+#else
+		v4 oceanNewLoc = boat->oceanGridLocation;
+		v4 oceanScale = {1.0f, 1.0f, 1.0f, 1.0f};
+		v4 oceanRotation = QuaternionIdentity();
+		oceanGrid.oceanModelMat = CreateModelMatrix(oceanScale,
+							    oceanRotation,
+							    oceanNewLoc);
 		    
-
+#endif
 #if 0		
 		char normalBoat[256];
 		sprintf_s(normalBoat, sizeof(normalBoat), "BoatRot TargetYaw: %f\n",
