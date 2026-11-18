@@ -5,7 +5,7 @@
 #include "D:/ExternalCustomAPIs/OBJLoader/code/obj_parser_dll_include.h"
 #include "scripting.h"
 #include "sail_data_collection.h"
-
+#include "ocean.h"
 
 #if defined(_MSC_VER)
 #define GAME_CALL __vectorcall
@@ -161,6 +161,8 @@ struct game_state
     static_cam_location currentCamLocation;
     play_mode playMode;
     world_clock worldClock;
+
+    game_ocean* gameOcean;
 };
 
 enum sail_orientation
@@ -449,6 +451,7 @@ struct boat_entity
 
     v4 oceanGridLocation;
     location_update oceanGridUpdate;
+    r32 normalizedSpeed;
 };
 
 struct joystick_rotation
@@ -473,6 +476,7 @@ struct sail_initialize_data
 
     spawned_obj_info* skybox;
     spawned_obj_info* theSun;
+    game_ocean gameOcean;
 };
 
 struct platform_info

@@ -704,19 +704,23 @@ UpdateWavesOnWeatherLevel(game_state* gameState, wave_properties* properties, wa
 }
 
 
+#include "ocean.cpp"
+
 struct wave_computation
 {
     v4 n;
     r32 yPos;
 };
 
+
 internal wave_computation
-ComputeWave(boat_entity* boat, r32 boatYaw)
+ComputeWave(boat_entity* boat, r32 boatYaw, game_ocean* ocean)
 {
     //Get sample points of the boat
     wave_computation result = {};
-    r32 boatL = 8.74f;
-    r32 boatW = 3.12f;
+    r32 boatIncSize = 1.0f;
+    r32 boatL = 8.74f * boatIncSize;
+    r32 boatW = 3.12f * boatIncSize;
 
     r32 time = boat->waveInfo.t;
     
@@ -737,21 +741,35 @@ ComputeWave(boat_entity* boat, r32 boatYaw)
     v2 portW = worldPos + portL;
     v2 starboardW = worldPos + starboardL;
 
-
+#if 0
     r32 yBow = GerstnerWaveHeight(bowW, time, &boat->waveInfo.properties);
     r32 yStern = GerstnerWaveHeight(sternW, time, &boat->waveInfo.properties);
     r32 yPort = GerstnerWaveHeight(portW, time, &boat->waveInfo.properties);
     r32 yStarboard = GerstnerWaveHeight(starboardW, time, &boat->waveInfo.properties);
-
-
+#else
+    r32 yBow = CalculatePositionFromGrid(bowW, ocean);
+    r32 yStern = CalculatePositionFromGrid(sternW, ocean);
+    r32 yPort = CalculatePositionFromGrid(portW, ocean);
+    r32 yStarboard = CalculatePositionFromGrid(starboardW, ocean);    
+#endif
     r32 yBmyS = yBow - yStern;
     r32 ySmyP = yStarboard - yPort;
     
     r32 boatY = (yBow + yStern + yPort + yStarboard) / 4.0f;
+
+
+    //Testing zone
+//    r32 minus = 1 - boat->normalizedSpeed;
+//    boatY -= boat->normalizedSpeed
+
+    
     result.yPos = boatY;
     r32 pitch = yBmyS / boatL;
     r32 roll = ySmyP / boatW;
 
+//    yBmyS -= boat->normalizedSpeed;
+//    ySmyP -= boat->normalizedSpeed;
+    
     v4 longitudinal = {0.0f, yBmyS, boatL, 0.0f};
     v4 transverse = {boatW, ySmyP, 0.0f, 0.0f};
 
@@ -874,6 +892,20 @@ CalculateNewInheritedLocation(v4 offset, v4 rotation, v4 location)
     return(result);
 }
 
+internal v4
+AddCameraSpring(game_camera* camera, v4 targetPosition)
+{
+    r32 stiffness = 120.0f;
+    r32 damping = 40.0f;
+    v4 displacement = targetPosition - camera->position;
+    v4 springForce = displacement * stiffness;
+    v4 dampingForce = camera->velocity * damping;
+    v4 acceleration = springForce - dampingForce;
+    camera->velocity += acceleration * deltaTime;
+    v4 result = camera->position + (camera->velocity * deltaTime);
+    return(result);
+}
+
 internal void
 CalculateCameraLocation(game_camera* camera, boat_entity* boat)
 {
@@ -884,7 +916,12 @@ CalculateCameraLocation(game_camera* camera, boat_entity* boat)
 				      boat->objInfo->modelTransform.location);
     camera->targetForward = locInfo.targetForward;
     camera->inheritedRotation = locInfo.inheritedRotation;
-    camera->position = locInfo.position;    
+    //apply our spring
+#if 0    
+    camera->position = locInfo.position;
+#else
+    camera->position = AddCameraSpring(camera, locInfo.position);
+#endif    
 }
 
 internal void
@@ -1071,9 +1108,11 @@ CheckAndUpdateDestination(boat_entity* boat, hud* gameHUD)
 internal r32
 ProcessGamepadTurnMovement(boat_entity* boat, r32 turnSpeed, r32 triggerAverage)
 {
-    r32 triggerConstant = 0.8f; //make exponential and not linear???
+    r32 triggerConstant = 0.5f;
     r32 result = 0.0f;
-    triggerConstant *= triggerAverage;
+    r32 exp = 2.4f;
+    r32 curvedTrigger = powf(triggerAverage, exp);
+    triggerConstant *= curvedTrigger;
     turnSpeed *= triggerConstant;
     result = boat->targetBoatRotations.y + turnSpeed;
     return(result);
@@ -1086,7 +1125,7 @@ ProcessGamepadTurnMovement(boat_entity* boat, r32 turnSpeed, r32 triggerAverage)
 
 extern "C" SAIL_INITIALIZE(SailInitialize)
 {
-
+    initData->gameOcean = InitGameOceanValues();
 
     game_camera cameraResult = {};
     
@@ -1665,7 +1704,7 @@ extern "C" SAIL_INITIALIZE(SailInitialize)
     initData->boat.speedOmeter.maxRoll = -90.0f;
 //BOAT
 
-    v4 camOffset = {0.0f, 1.0f, 3.0f, 0.0f};    
+    v4 camOffset = {0.0f, 1.0f, 2.6f, 0.0f};    
 
     
     initData->boat.lerpTimeSpeed = 1.f;
@@ -1965,7 +2004,7 @@ RotateOBJLocal(spawned_obj_info* objInfo, v4 startRot, v4* targetRot, r32 lerpSp
 
 
 internal void
-ApplyBoatWaveRotations(boat_entity* boat)
+ApplyBoatWaveRotations(boat_entity* boat, game_ocean* ocean)
 {
 
     r32 currentYawAngle = (r32)DEG2RAD(boat->targetBoatRotations.yaw);
@@ -1980,7 +2019,7 @@ ApplyBoatWaveRotations(boat_entity* boat)
     
     r32 timeStep = 0.3f;
     boat->waveInfo.t += timeStep * deltaTime;
-    wave_computation wave = ComputeWave(boat, currentYawAngle);
+    wave_computation wave = ComputeWave(boat, currentYawAngle, ocean);
     v4 qWave = wave.n;
     boat->vOutput = qWave;
     v4 localUp = {0.0f, 1.0f, 0.0f, 0.0f};
@@ -2433,7 +2472,7 @@ extern "C" SAIL_UPDATE(SailUpdate)
 		r32 turnSpeed = 0.0f;
 		if (boat->movementDirection == bmd_forward)
 		{
-		    turnSpeed = (40.0f * boat->movementSpeed) * deltaTime;
+		    turnSpeed = (80.0f * boat->movementSpeed) * deltaTime;
 		}
 		else
 		{
@@ -2628,7 +2667,7 @@ extern "C" SAIL_UPDATE(SailUpdate)
 
 
 	    
-	    ApplyBoatWaveRotations(boat);	
+	    ApplyBoatWaveRotations(boat, gameState->gameOcean);	
 
 	    UpdateBoatVectors(boat);
 

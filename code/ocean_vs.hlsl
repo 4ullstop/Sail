@@ -89,8 +89,8 @@ VS_OUTPUT main(VS_INPUT input)
 	float4 viewPos = mul(worldPos, view);
 #endif
 
-
-
+//lighting calculations may be a little funky now that we are using world position,
+//at some point take a look @ this
 
 	float4 projPos = mul(viewPos, projection);
 

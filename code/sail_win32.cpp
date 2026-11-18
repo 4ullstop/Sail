@@ -155,22 +155,9 @@ struct game_vertex_pos_color
 
 struct ocean
 {
-    r32 planeSize;
-    r32 width;
-    r32 length;
-
-    u32 sliceWidth;
-    u32 sliceLength;
-    
-    i32 resolution;
+    game_ocean* gameOcean;
     vertex_position_color* verts;
-    u32* indices;
-
-    u32 indexCount;
-
-    m4 oceanModelMat;
-
-    r32 time;
+    u32* indices;    
 };
 
 internal ocean_buffers
@@ -182,7 +169,7 @@ CreateOceanBuffers(ocean* oceanGrid)
     
     D3D11_BUFFER_DESC oceanDesc = {};
     oceanDesc.Usage = D3D11_USAGE_DEFAULT;
-    oceanDesc.ByteWidth = sizeof(vertex_position_color) * oceanGrid->resolution;
+    oceanDesc.ByteWidth = sizeof(vertex_position_color) * oceanGrid->gameOcean->resolution;
     oceanDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
     oceanDesc.MiscFlags = 0;
     oceanDesc.CPUAccessFlags = 0;
@@ -198,10 +185,10 @@ CreateOceanBuffers(ocean* oceanGrid)
 				 &buffers.vertBuffer);
 
     CD3D11_BUFFER_DESC indexDesc(
-	sizeof(u32) * oceanGrid->indexCount,
+	sizeof(u32) * oceanGrid->gameOcean->indexCount,
 	D3D11_BIND_INDEX_BUFFER);
 
-    buffers.indexCount = oceanGrid->indexCount;
+    buffers.indexCount = oceanGrid->gameOcean->indexCount;
     D3D11_SUBRESOURCE_DATA indexData;
     ZeroMemory(&indexData, sizeof(D3D11_SUBRESOURCE_DATA));
     indexData.pSysMem = oceanGrid->indices;
@@ -228,23 +215,20 @@ CreateOceanBuffers(ocean* oceanGrid)
     cbDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
     cbDesc.CPUAccessFlags = 0;
 
-    r32 amp = 1.0f;
-    r32 waveLen = 1.0f;
-    for (i32 i = 0; i < 4; i++)
+    i32 rows = 4;
+    i32 columns = 4;
+    
+    for (i32 i = 0; i < rows; i++)
     {
-	for (i32 j = 0; j < 4; j++)
+	for (i32 j = 0; j < columns; j++)
 	{
-	    r32 ampDec = 0.6f;
-	    r32 waveLenInc = 1.18f;
-	    amp *= ampDec;
-	    buffers.oceanSC.amp[i][j] = amp;
-	    waveLen *= waveLenInc;
-	    buffers.oceanSC.frequency[i][j] = 2 / waveLen;
-	    r32 randSpeed = RandomFloatInRange(0.5f, 1.5f);
-	    buffers.oceanSC.phase[i][j] = (randSpeed * (2 / waveLen));
-	    r32 randDirection = RandomFloatInRange(0.0f, 1.0f);
-	    buffers.oceanSC.directions[i][j] = randDirection;
+	    i32 index = (i * columns) + j;
+	    buffers.oceanSC.amp[i][j] = oceanGrid->gameOcean->amplitudes[index];
+	    buffers.oceanSC.frequency[i][j] = oceanGrid->gameOcean->frequencies[index];
+	    buffers.oceanSC.phase[i][j] = oceanGrid->gameOcean->phases[index];
+	    buffers.oceanSC.directions[i][j] = oceanGrid->gameOcean->directions[index];
 	}
+
     }
 
     D3D11_SUBRESOURCE_DATA sineConstantData;
@@ -260,79 +244,59 @@ CreateOceanBuffers(ocean* oceanGrid)
     return(buffers);
 }
 
-internal ocean
-CreateOceanGrid(memory_arena* arena)
+internal void
+CreateOceanGrid(memory_arena* arena, ocean* oceanGrid)
 {
     //Create [100][100] grid, store in buffers and present for rendering
-    ocean oceanGrid = {};
 
-    v4 oceanLoc = {0.0f, -1.0f, 0.0f, 0.0f};
-    v4 oceanRot = QuaternionIdentity();
-    v4 oceanScale = {1.0f, 1.0f, 1.0f, 1.0f};
+    r32 dx = oceanGrid->gameOcean->width / oceanGrid->gameOcean->sliceWidth;
+    r32 dz = oceanGrid->gameOcean->length / oceanGrid->gameOcean->sliceLength;
+    r32 halfWidth = oceanGrid->gameOcean->width / 2.0f;
+    r32 halfLength = oceanGrid->gameOcean->length / 2.0f;
     
-    oceanGrid.oceanModelMat = CreateModelMatrix(oceanScale,
-						oceanRot,
-						oceanLoc);
-    oceanGrid.oceanModelMat = oceanGrid.oceanModelMat * Identity();
-    oceanGrid.sliceWidth = 1200;
-    oceanGrid.sliceLength = 1200;
-    oceanGrid.width = 400.0f;
-    oceanGrid.length = 400.0f;
-
-    u32 vertexCountX = oceanGrid.sliceWidth + 1;
-    u32 vertexCountZ = oceanGrid.sliceLength + 1;
-    oceanGrid.resolution = vertexCountX * vertexCountZ;
-    oceanGrid.planeSize = 0.5f;
-
-    r32 dx = oceanGrid.width / oceanGrid.sliceWidth;
-    r32 dz = oceanGrid.length / oceanGrid.sliceLength;
-    r32 halfWidth = oceanGrid.width / 2.0f;
-    r32 halfLength = oceanGrid.length / 2.0f;
-    
-    oceanGrid.verts =
-	(vertex_position_color*)memoryPoolCode.PushArraySized(arena, sizeof(vertex_position_color) * oceanGrid.resolution);
+    oceanGrid->verts =
+	(vertex_position_color*)memoryPoolCode.PushArraySized(arena, sizeof(vertex_position_color) * oceanGrid->gameOcean->resolution);
 
     
-    for (u32 z = 0, i = 0; z < vertexCountZ; ++z)
+    for (u32 z = 0, i = 0; z < oceanGrid->gameOcean->vertexCountZ; ++z)
     {
 	r32 zPos = halfLength - (z * dz);
-	for (u32 x = 0; x < vertexCountX; ++x)
+	for (u32 x = 0; x < oceanGrid->gameOcean->vertexCountX; ++x)
 	{
 	    r32 xPos = -halfWidth + (x * dx);
 	    vertex_position_color v;
 	    v.pos = {xPos, 0.0f, zPos};
 	    v.color = {0.2f, 0.2f, 0.8f};
-	    v.texCoord = {(r32)x / oceanGrid.sliceWidth, (r32)z / oceanGrid.sliceLength};
-	    oceanGrid.verts[i++] = v;
+	    v.texCoord = {(r32)x / oceanGrid->gameOcean->sliceWidth, (r32)z / oceanGrid->gameOcean->sliceLength};
+	    oceanGrid->verts[i++] = v;
 	}
     }
 
-    u32 totalQuadCount = oceanGrid.sliceWidth * oceanGrid.sliceLength;
+    u32 totalQuadCount = oceanGrid->gameOcean->sliceWidth * oceanGrid->gameOcean->sliceLength;
     u32 totalIndexCount = totalQuadCount * 6;
-    oceanGrid.indices = (u32*)memoryPoolCode.PushArraySized(arena, sizeof(u32) * totalIndexCount);
+    oceanGrid->indices = (u32*)memoryPoolCode.PushArraySized(arena, sizeof(u32) * totalIndexCount);
     u32 indexOffset = 0;
-    for (u32 z = 0; z < oceanGrid.sliceLength; ++z)
+    for (u32 z = 0; z < oceanGrid->gameOcean->sliceLength; ++z)
     {
-	for (u32 x = 0; x < oceanGrid.sliceWidth; ++x)
+	for (u32 x = 0; x < oceanGrid->gameOcean->sliceWidth; ++x)
 	{
-	    u32 topLeft = (u32)(z * vertexCountX) + x;
+	    u32 topLeft = (u32)(z * oceanGrid->gameOcean->vertexCountX) + x;
 	    u32 topRight = topLeft + 1;
-	    u32 bottomLeft = (u32)((z + 1) * vertexCountX) + x;
+	    u32 bottomLeft = (u32)((z + 1) * oceanGrid->gameOcean->vertexCountX) + x;
 	    u32 bottomRight = bottomLeft + 1;
 
-	    oceanGrid.indices[indexOffset++] = topLeft;
-	    oceanGrid.indices[indexOffset++] = bottomLeft;
-	    oceanGrid.indices[indexOffset++] = topRight;
+	    oceanGrid->indices[indexOffset++] = topLeft;
+	    oceanGrid->indices[indexOffset++] = bottomLeft;
+	    oceanGrid->indices[indexOffset++] = topRight;
 
-	    oceanGrid.indices[indexOffset++] = topRight;
-	    oceanGrid.indices[indexOffset++] = bottomLeft;
-	    oceanGrid.indices[indexOffset++] = bottomRight;
+	    oceanGrid->indices[indexOffset++] = topRight;
+	    oceanGrid->indices[indexOffset++] = bottomLeft;
+	    oceanGrid->indices[indexOffset++] = bottomRight;
 
 	}
     }
 
-    oceanGrid.indexCount = totalIndexCount;    
-    return(oceanGrid);
+    oceanGrid->gameOcean->indexCount = totalIndexCount;    
 }
 
 
@@ -877,7 +841,7 @@ RenderOcean(ocean* oceanGrid, ocean_buffers* oceanBuffers, shaders* shader, sail
     HRESULT hr = {};
 
 
-    oceanGrid->time += 1.0f * deltaTime;
+    oceanGrid->gameOcean->time += 1.0f * deltaTime;
     context->VSSetShader(shader->oceanVSShader,
 			 nullptr,
 			 0);
@@ -906,10 +870,10 @@ RenderOcean(ocean* oceanGrid, ocean_buffers* oceanBuffers, shaders* shader, sail
     hr = context->Map(oceanBuffers->oceanUpdateBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
     //change object_constants
     ocean_update* data = (ocean_update*)mapped.pData;
-    DirectX::XMMATRIX dxMat = win32Code.Win32FromM4ToXMMATRIX(oceanGrid->oceanModelMat);
+    DirectX::XMMATRIX dxMat = win32Code.Win32FromM4ToXMMATRIX(oceanGrid->gameOcean->oceanModelMat);
     dxMat = DirectX::XMMatrixTranspose(dxMat);
     DirectX::XMStoreFloat4x4(&data->modelMat, dxMat);
-    data->t = oceanGrid->time;
+    data->t = oceanGrid->gameOcean->time;
     context->Unmap(oceanBuffers->oceanUpdateBuffer, 0);
 
     
@@ -1335,7 +1299,10 @@ int CALLBACK WinMain(HINSTANCE hInstance,
     sun.lightColor = DirectX::XMVectorSet(0.6f, 0.2f, 0.1f, 10.0f);
 
     
-    ocean oceanGrid = CreateOceanGrid(platformInfo.frameworkArenas.setupArena);
+//    ocean oceanGrid = CreateOceanGrid(platformInfo.frameworkArenas.setupArena);
+    ocean oceanGrid = {};
+    oceanGrid.gameOcean = &sailInitData.gameOcean;
+    CreateOceanGrid(platformInfo.frameworkArenas.setupArena, &oceanGrid);
     ocean_buffers oceanBuffers = CreateOceanBuffers(&oceanGrid);
     
     if (RegisterClass(&wc))
@@ -1770,9 +1737,10 @@ int CALLBACK WinMain(HINSTANCE hInstance,
 
 	    game_state gameState = {};
 	    gameState.gameHUD = &gameHUD;
+	    gameState.gameOcean = &sailInitData.gameOcean;
 
 	    boat_entity* boat = &sailInitData.boat;
-	    boat->oceanGridLocation = {0.0f, -1.4f, 0.0f, 0.0f};
+	    boat->oceanGridLocation = {0.0f, -1.0f, 0.0f, 0.0f};
 	    
 	    if (RegisterRawInputDevices(rid, 1, sizeof(rid[0])) == FALSE)
 	    {
@@ -1826,7 +1794,7 @@ int CALLBACK WinMain(HINSTANCE hInstance,
 		v4 oceanNewLoc = {boat->objInfo->modelTransform.location.x, -1.4f, boat->objInfo->modelTransform.location.z, 1.0f};
 		v4 oceanScale = {1.0f, 1.0f, 1.0f, 1.0f};
 		v4 oceanRotation = QuaternionIdentity();
-		oceanGrid.oceanModelMat = CreateModelMatrix(oceanScale,
+		oceanGrid.gameOcean->oceanModelMat = CreateModelMatrix(oceanScale,
 							oceanRotation,
 							oceanNewLoc);
 #else
