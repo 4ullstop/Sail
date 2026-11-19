@@ -719,7 +719,7 @@ ComputeWave(boat_entity* boat, r32 boatYaw, game_ocean* ocean)
     //Get sample points of the boat
     wave_computation result = {};
     r32 boatIncSize = 1.0f;
-    r32 boatL = 8.74f * boatIncSize;
+    r32 boatL = 8.74f * 0.5f;
     r32 boatW = 3.12f * boatIncSize;
 
     r32 time = boat->waveInfo.t;
@@ -895,8 +895,8 @@ CalculateNewInheritedLocation(v4 offset, v4 rotation, v4 location)
 internal v4
 AddCameraSpring(game_camera* camera, v4 targetPosition)
 {
-    r32 stiffness = 120.0f;
-    r32 damping = 40.0f;
+    r32 stiffness = 100.0f;
+    r32 damping = 20.0f;
     v4 displacement = targetPosition - camera->position;
     v4 springForce = displacement * stiffness;
     v4 dampingForce = camera->velocity * damping;
@@ -1117,7 +1117,6 @@ ProcessGamepadTurnMovement(boat_entity* boat, r32 turnSpeed, r32 triggerAverage)
     result = boat->targetBoatRotations.y + turnSpeed;
     return(result);
 }
-
 
 //External calls
 
@@ -2039,18 +2038,87 @@ ApplyBoatWaveRotations(boat_entity* boat, game_ocean* ocean)
     v4 quat = {v.x, v.y, v.z, w};
     v4 qTilt = QuaternionNormalize(quat);
     v4 targetRot = QuaternionMultiply(qTilt, qYaw);
+
+
+    
+    
     
     v4 addedPos = {0.0f, wave.yPos, 0.0f, 0.0f};
 
     r32 baseWaterLevel = 0.0f;
+    r32 floatOffset = -2.5f;
+    //add these to boat if you want to change them
+    r32 stiffnessY = 40.0f;
+    r32 dampingY = 13.0f;
+#if 0    
     boat->objInfo->modelTransform.location.y = baseWaterLevel + wave.yPos;
+#else
+    r32 targetY = baseWaterLevel + wave.yPos + floatOffset;
+    r32 currentY = boat->objInfo->modelTransform.location.y;
+    r32 errorY = targetY - currentY;
+    r32 accelY = stiffnessY * errorY - dampingY * boat->yPosVel;
+    boat->yPosVel += accelY * deltaTime;
+    boat->objInfo->modelTransform.location.y = boat->yPosVel * deltaTime;
+#endif
 
-    
+#if 1
+    if (DotV4(boat->currRot, targetRot).x < 0.0f)
+    {
+	targetRot.x = -targetRot.x;
+	targetRot.y = -targetRot.y;
+	targetRot.z = -targetRot.z;
+	targetRot.w = -targetRot.w;
+    }
 
+    v4 qCurrInv = {-boat->currRot.x, -boat->currRot.y, -boat->currRot.z, boat->currRot.w};
+    v4 qErr = QuaternionNormalize(QuaternionMultiply(targetRot, qCurrInv));
 
+    v4 errAxisVec = {qErr.x, qErr.y, qErr.z, 0.0f};
+    r32 errLenSq = VecLenSq(errAxisVec).x;
+    r32 sinHalfAngle = (r32)sqrt(errLenSq);
+    v4 angError = {};
+
+    if (sinHalfAngle > 1e-6f)
+    {
+	r32 angle = 2.0f * (r32)atan2(sinHalfAngle, qErr.w);
+	while (angle > FM_PI) angle -= FM_2PI;
+	while (angle < -FM_PI) angle += FM_2PI;
+
+	v4 axis = errAxisVec * (1.0f / sinHalfAngle);
+	angError = axis * angle;
+    }
+
+    r32 stiffnessAngle = 40.0f;
+    r32 dampingAngle = 16.0f;
+    v4 angAccel = (angError * stiffnessAngle);
+    angAccel -= (boat->angularVelocity * dampingAngle);
+    boat->angularVelocity += (angAccel * deltaTime);
+
+    v4 deltaRotVec = boat->angularVelocity * deltaTime;
+    r32 deltaRotVecSq = VecLenSq(deltaRotVec).x;
+    r32 deltaAngle = (r32)sqrtf(deltaRotVecSq);
+    v4 qDelta = {0.0f, 0.0f, 0.0f, 1.0f};
+
+    if (deltaAngle > 1e-6f)
+    {
+	v4 deltaAxis = deltaRotVec * (1.0f / deltaAngle);
+	r32 halfAngle = 0.5f * deltaAngle;
+	r32 s = sinf(halfAngle);
+	qDelta.x = deltaAxis.x * s;
+	qDelta.y = deltaAxis.y * s;
+	qDelta.z = deltaAxis.z * s;
+	qDelta.w = cosf(halfAngle);
+    }
+
+    v4 outRotation = QuaternionNormalize(QuaternionMultiply(qDelta, boat->currRot));
+    boat->currRot = outRotation;
+#else
     v4 t4 = {timeStep, timeStep, timeStep, timeStep};
     v4 outRotation = QuaternionSlerpV(boat->currRot, targetRot, t4);
-    boat->currRot = outRotation;
+    boat->currRot = outRotation;    
+#endif
+
+
     boat->objInfo->modelTransform.rotation = outRotation;
     boat->objInfo->modelMatrix = CreateModelMatrix(boat->objInfo->modelTransform.scale,
 						   boat->objInfo->modelTransform.rotation,

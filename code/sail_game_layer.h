@@ -16,6 +16,7 @@
 #endif
 
 #define MAXLINECOUNT 16
+#define BOATFROMWATER -2.4f
 
 enum e_weather_level : u8
 {
@@ -400,7 +401,9 @@ struct boat_entity
     r32 roll;
 
     v3 targetBoatRotations;
-    v3 angularVelocity;
+    v4 angularVelocity;
+
+    r32 yPosVel;
 
     r32 currTargetYaw;
     r32 varianceTargetYaw;

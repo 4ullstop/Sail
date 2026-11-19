@@ -1740,7 +1740,7 @@ int CALLBACK WinMain(HINSTANCE hInstance,
 	    gameState.gameOcean = &sailInitData.gameOcean;
 
 	    boat_entity* boat = &sailInitData.boat;
-	    boat->oceanGridLocation = {0.0f, -1.0f, 0.0f, 0.0f};
+	    boat->oceanGridLocation = {0.0f, BOATFROMWATER, 0.0f, 0.0f};
 	    
 	    if (RegisterRawInputDevices(rid, 1, sizeof(rid[0])) == FALSE)
 	    {
@@ -1791,7 +1791,7 @@ int CALLBACK WinMain(HINSTANCE hInstance,
 		sail_type* main = &boat->sailInfo.mainSail;
 		
 #if 1
-		v4 oceanNewLoc = {boat->objInfo->modelTransform.location.x, -1.4f, boat->objInfo->modelTransform.location.z, 1.0f};
+		v4 oceanNewLoc = {boat->objInfo->modelTransform.location.x, BOATFROMWATER, boat->objInfo->modelTransform.location.z, 1.0f};
 		v4 oceanScale = {1.0f, 1.0f, 1.0f, 1.0f};
 		v4 oceanRotation = QuaternionIdentity();
 		oceanGrid.gameOcean->oceanModelMat = CreateModelMatrix(oceanScale,

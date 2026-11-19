@@ -26,7 +26,7 @@ internal game_ocean
 InitGameOceanValues()
 {
     game_ocean result = {};
-    v4 oceanLoc = {0.0f, -1.0f, 0.0f, 0.0f};
+    v4 oceanLoc = {0.0f, BOATFROMWATER, 0.0f, 0.0f};
     v4 oceanRot = QuaternionIdentity();
     v4 oceanScale = {1.0f, 1.0f, 1.0f, 1.0f};
     
